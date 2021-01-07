@@ -1,10 +1,36 @@
 import re
+from typing import Union, Dict
+
 import pandas as pd
 from ira.analysis.tools import ohlc_resample
 from qlearn.core.data_utils import _get_top_names, detect_data_type, make_dataframe_from_dict
 
 
 class Resampler:
+
+    def __init__(self):
+        self.start_ = None
+        self.stop_ = None
+
+    def for_range(self, start, stop=None):
+        """
+        If we need to select range of data to operate on
+        :param start: starting date
+        :param stop: end date
+        :return:
+        """
+        self.start_ = start
+        self.stop_ = stop
+        return self
+
+    def _select(self, x):
+        nf = self.start_ is not None or self.stop_ is not None
+
+        if nf:
+            s = x.index[0] if self.start_ is None else self.start_
+            e = x.index[-1] if (self.stop_ is None or self.stop_ == 'now') else self.stop_
+            return x[s:e]
+        return x
 
     def _resample(self, data, timeframe, tz):
         """
@@ -18,11 +44,12 @@ class Resampler:
                 cols = data.columns
                 if isinstance(cols, pd.MultiIndex):
                     symbols = _get_top_names(cols)
-                    return pd.concat([ohlc_resample(data[c], timeframe, resample_tz=tz) for c in symbols], axis=1, keys=symbols)
+                    return self._select(pd.concat([ohlc_resample(data[c], timeframe, resample_tz=tz) for c in symbols], axis=1, keys=symbols))
 
             # all the rest cases
             r = ohlc_resample(data, timeframe, resample_tz=tz)
-        return r
+            
+        return self._select(r)
 
 
 class AbstractDataPicker(Resampler):
@@ -31,20 +58,11 @@ class AbstractDataPicker(Resampler):
     """
 
     def __init__(self, rules=None, timeframe=None, tz='UTC'):
+        super(AbstractDataPicker, self).__init__()
         rules = [] if rules is None else rules
         self.rules = rules if isinstance(rules, (list, tuple, set)) else [rules]
         self.timeframe = timeframe
         self.tz = tz
-
-    def select_range(self, start, stop=None):
-        """
-        If we need to select range of data to operate on
-        :param start: starting date
-        :param stop: end date
-        :return:
-        """
-        # TODO !!!!
-        pass
 
     def _is_selected(self, s, rules):
         if not rules:
@@ -61,6 +79,39 @@ class AbstractDataPicker(Resampler):
         info = detect_data_type(data)
         selected = [s for s in info.symbols if self._is_selected(s, self.rules)]
         return self.iterdata(data, selected, info.type, info.symbols, info.subtypes)
+
+    def take(self, data, nth: Union[str, int] = 0):
+        """
+        Helper method to take n-th iteration
+        :param data: data to be iterated
+        :param nth: if int it returns n-th iteration of data
+        :return: data or none if not matched
+        """
+        for i, (s, data) in enumerate(self.iterate(data)):
+            if isinstance(nth, int):
+                if i == nth:
+                    return data
+
+            if isinstance(nth, str):
+                if s == nth:
+                    return data
+        return None
+
+    def as_datasource(self, data) -> Dict:
+        """
+        Return prepared data ready to be used in simulator
+        
+        :param data:
+        :return:
+        """
+        _ds = {}
+        for s, data in self.iterate(data):
+            if isinstance(s, (list, tuple)):
+                _ds = {**_ds, **{k: data[k] for k in s}}
+            else:
+                _ds[s] = data
+        return _ds
+
 
 
 class SingleInstrumentPicker(AbstractDataPicker):
