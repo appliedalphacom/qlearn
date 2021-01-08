@@ -87,15 +87,17 @@ class AbstractDataPicker(Resampler):
         :param nth: if int it returns n-th iteration of data
         :return: data or none if not matched
         """
-        for i, (s, data) in enumerate(self.iterate(data)):
-            if isinstance(nth, int):
-                if i == nth:
-                    return data
+        v = None
 
-            if isinstance(nth, str):
-                if s == nth:
-                    return data
-        return None
+        # if we look for some specific pattern in symbols
+        if isinstance(nth, str):
+            v = next((data for (s, data) in self.iterate(data) if re.match(nth, s)), None)
+
+        # if we just asked for n-th record
+        if isinstance(nth, int):
+            v = next((data for (i, (s, data)) in enumerate(self.iterate(data)) if i == nth), None)
+
+        return v
 
     def as_datasource(self, data) -> Dict:
         """

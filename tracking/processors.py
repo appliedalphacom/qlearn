@@ -8,18 +8,37 @@ from ira.simulator.utils import shift_signals
 from ira.utils.utils import mstruct
 
 
-class BasicSignalTracker:
-    """
-    Basic continuation signals tracker
+class TradingService:
+    def push_signal(self, time, signal):
+        raise ValueError('push_signal method must be implemented')
+
+    def trade(self, time, signal):
+        raise ValueError('trade method must be implemented')
+
+
+class Tracker:
+    def track_signal(self, service: TradingService, signal_time, signal, signal_price, times, data):
+        service.trade(signal_time, signal)
+        return signal_time
     
-    13-Jul-2020: added filtering
+    def filter(self, signals, *args, **kwargs):
+        """
+        Signals filtering (pass everything by default)
+        """
+        return signals
+
+
+class GeneralSignalProcessor(TradingService):
     """
-    def __init__(self, instrument, price_data, field='close', actualize_execution_times=True):
+    Basic signals tracker
+    """
+    def __init__(self, instrument, price_data, execution_price_name='close', actualize_execution_times=True):
         self.data = price_data
         self.instrument = instrument
-        self.field = 'close'
-        self.f_idx = self.data.columns.get_loc(field)
+        self.field = execution_price_name
+        self.f_idx = self.data.columns.get_loc(execution_price_name)
         self._data = price_data.values
+        # self._data_timeline = price_data.index.to_numpy()
         self._data_timeline = price_data.index
         self.data_size = len(price_data)
         self._d0, self._d1 = self._data.shape
@@ -33,91 +52,87 @@ class BasicSignalTracker:
         self._processed_sigs = []
         # workaround for simulator
         self.trade(self.data.index[0], 0)
-        
-    def trade(self, time, position):
-        self._final_signals[time] = position
-            
-    def push_signal(self, time, signal):
-        self._processed_times.append(time)
-        self._processed_sigs.append(signal)
-    
-    def signals(self, prices, *args, **kwargs):
-        raise ValueError("Method 'signals' must be implemented !")
-    
+
     def track_signal(self, signal_time, signal, signal_price, times, data):
         self.trade(signal_time, signal)
         return signal_time
-    
+
+    def trade(self, time, position):
+        self._final_signals[time] = position
+
+    def push_signal(self, time, signal):
+        self._processed_times.append(time)
+        self._processed_sigs.append(signal)
+
     def _get_data_slice_at(self, time):
         s_index = self._data_timeline.get_loc(time)
+        # s_index = np.where(self._data_timeline == time)[0][0]
         w = self.data_size - s_index
         a = stride(self._data, (self._d0 - (w - 1), w, self._d1), (self._s0, self._s0, self._s1))
         data = a[s_index]
         return mstruct(
-            times=self._data_timeline[s_index+1:],
+            times=self._data_timeline[s_index + 1:],
             ohlc=data[1:, :],
             price=data[0, self.f_idx])
-    
-    def setup(self, *args, **kwargs):
-        return self
-    
-    def filter(self, signals, *args, **kwargs):
-        """
-        Signals filtering (pass everything by default)
-        """
-        return signals
-    
-    def _init_processing_queues(self,):
+
+    def _init_processing_queues(self, ):
         self._processed_times = list(reversed(list(self._generated_signals.index.to_numpy())))
         self._processed_sigs = list(reversed(list(self._generated_signals.to_numpy())))
-    
-    def process(self, *args, **kwargs):
+
+    def process(self, tracker: Tracker, signals, *args, **kwargs):
         _dbg = False
         if 'debug' in kwargs:
             _dbg = kwargs.pop('debug')
-        
+
         # clean data
         self._final_signals = {}
         self._skiped_signals = []
-        
-        # custom setup
-        self.setup(*args, **kwargs)
-        
+
         # call generator
-        self._generated_signals = self.filter(self.signals(self.data))
+        self._generated_signals = tracker.filter(signals, *args, **kwargs)
         self._init_processing_queues()
         last_processed_time = pd.Timestamp('1684-01-01 00:00:00')
-        
+
         # go through all the signals
         while len(self._processed_sigs) > 0:
             sig_t, sig_s = self._processed_times.pop(-1), self._processed_sigs.pop(-1)
-            
+
             if sig_t < last_processed_time:
                 self._skiped_signals.append(sig_t)
                 if _dbg: print(magenta('~> skip %s last processed time is %s' % (sig_t, last_processed_time)))
                 continue
-                
+
             # get data after signal
             s_loc = self._get_data_slice_at(sig_t)
-            last_processed_time = self.track_signal(sig_t, sig_s, s_loc.price, s_loc.times, s_loc.ohlc)
-        
+            last_processed_time = tracker.track_signal(self, sig_t, sig_s, s_loc.price, s_loc.times, s_loc.ohlc)
+
         # final dataframe
         trade_signals = pd.DataFrame.from_dict(self._final_signals, orient='index', columns=[self.instrument])
-        
+
         # if we use close prices we need to shift signals to future to force execution on closes
         if self._shift and self.field == 'close':
             trade_signals = shift_signals(trade_signals, seconds=(self._tframe - pd.Timedelta('1S')).seconds)
-            
+
         return trade_signals
 
 
-class SimpleSignalTracker(BasicSignalTracker):
+class BasicTracker(Tracker):
 
-    def __init__(self, instrument, price_data, field, signals, actualize_execution_times=True):
-        super(SimpleSignalTracker, self).__init__(instrument, price_data, field, actualize_execution_times)
-        self.signals_ = signals
+    def track(self, instrument, signals, prices, execution_price_name='close'):
+        print(f'--(N signals : {len(signals)})----------------------------------------')
+        processor = GeneralSignalProcessor(instrument, prices, execution_price_name, True)
+        positions = processor.process(self, signals)
+        # TODO: .....
+        print(positions.head())
+        print('------------------------------------------')
 
-        def signals(self, prices):
-            return self.signals_
 
+class SimpleSignalTracker(BasicTracker):
+
+    def __init__(self, fixed_size=1):
+        self.fixed_size = fixed_size
+
+    def track_signal(self, service: TradingService, signal_time, signal, signal_price, times, data):
+        service.trade(signal_time, self.fixed_size * signal)
+        return signal_time
 
