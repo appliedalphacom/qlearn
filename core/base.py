@@ -3,7 +3,7 @@ import numpy as np
 import inspect
 import copy
 from dataclasses import dataclass
-from typing import Union, List, Set
+from typing import Union, List, Set, Dict
 
 from sklearn.base import BaseEstimator, RegressorMixin, clone, ClassifierMixin, ClusterMixin, DensityMixin
 from qlearn.core.pickers import AbstractDataPicker
@@ -28,6 +28,25 @@ class MarketDataComposer(BaseEstimator):
         self.symbols_ = []
         self.best_params_ = None
         self.best_score_ = None
+
+    def take(self, data, nth: Union[str, int] = 0):
+        """
+        Helper method to take n-th iteration from data picker
+
+        :param data: data to be iterated
+        :param nth: if int it returns n-th iteration of data
+        :return: data or none if not matched
+        """
+        return self.picker.take(data, nth)
+
+    def as_datasource(self, data) -> Dict:
+        """
+        Return prepared data ready to be used in simulator
+
+        :param data: input data
+        :return: {symbol : preprocessed_data}
+        """
+        return self.picker.as_datasource(data)
 
     def fit(self, X, y, **fit_params):
         # reset fitted predictors

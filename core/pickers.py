@@ -103,8 +103,8 @@ class AbstractDataPicker(Resampler):
         """
         Return prepared data ready to be used in simulator
         
-        :param data:
-        :return:
+        :param data: input data
+        :return: {symbol : preprocessed_data}
         """
         _ds = {}
         for s, data in self.iterate(data):
