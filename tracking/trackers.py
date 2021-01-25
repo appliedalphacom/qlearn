@@ -42,7 +42,7 @@ class TakeStopTracker(Tracker):
     def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
         if self._position.quantity > 0:
             if self.take and bid >= self.take:
-                self.debug(f' + take long [{self._instrument}] at {bid:.5f}')
+                self.debug(f' -> [{quote_time}] take long [{self._instrument}] at {bid:.5f}')
                 self.times_to_take.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_takes += 1
@@ -50,7 +50,7 @@ class TakeStopTracker(Tracker):
                 return
 
             if self.stop and ask <= self.stop:
-                self.debug(f' - stop long [{self._instrument}] at {ask:.5f}')
+                self.debug(f' -> [{quote_time}] stop long [{self._instrument}] at {ask:.5f}')
                 self.times_to_stop.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_stops += 1
@@ -59,7 +59,7 @@ class TakeStopTracker(Tracker):
 
         if self._position.quantity < 0:
             if self.take and ask <= self.take:
-                self.debug(f' + take short [{self._instrument}] at {ask:.5f}')
+                self.debug(f' -> [{quote_time}] take short [{self._instrument}] at {ask:.5f}')
                 self.times_to_take.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_takes += 1
@@ -67,7 +67,7 @@ class TakeStopTracker(Tracker):
                 return
 
             if self.stop and bid >= self.stop:
-                self.debug(f' - stop short [{self._instrument}] at {bid:.5f}')
+                self.debug(f' -> [{quote_time}] stop short [{self._instrument}] at {bid:.5f}')
                 self.times_to_stop.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_stops += 1
