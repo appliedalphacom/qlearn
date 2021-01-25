@@ -17,6 +17,8 @@ class TakeStopTracker(Tracker):
         self.n_takes = 0
         self.times_to_take = []
         self.times_to_stop = []
+        # what is last triggered event: 'stop' or 'take' (None if nothing was triggered yet)
+        self.last_triggered_event = None
         if debug:
             self.debug = print
 
@@ -41,31 +43,35 @@ class TakeStopTracker(Tracker):
         if self._position.quantity > 0:
             if bid >= self.take:
                 self.debug(f' + take long [{self._instrument}] at {bid:.5f}')
+                self.times_to_take.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_takes += 1
-                self.times_to_take.append(quote_time - self._last_trade_time)
+                self.last_triggered_event = 'take'
                 return
 
             if ask <= self.stop:
                 self.debug(f' - stop long [{self._instrument}] at {ask:.5f}')
+                self.times_to_stop.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_stops += 1
-                self.times_to_stop.append(quote_time - self._last_trade_time)
+                self.last_triggered_event = 'stop'
                 return
 
         if self._position.quantity < 0:
             if ask <= self.take:
                 self.debug(f' + take short [{self._instrument}] at {ask:.5f}')
+                self.times_to_take.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_takes += 1
-                self.times_to_take.append(quote_time - self._last_trade_time)
+                self.last_triggered_event = 'take'
                 return
 
             if bid >= self.stop:
                 self.debug(f' - stop short [{self._instrument}] at {bid:.5f}')
+                self.times_to_stop.append(quote_time - self._last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_stops += 1
-                self.times_to_stop.append(quote_time - self._last_trade_time)
+                self.last_triggered_event = 'stop'
                 return
 
     def statistics(self) -> Dict:
