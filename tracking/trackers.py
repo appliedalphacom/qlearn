@@ -1,6 +1,7 @@
 from typing import Dict
 
 import numpy as np
+import pandas as pd
 
 from ira.simulator.SignalTester import Tracker
 
@@ -43,7 +44,7 @@ class TakeStopTracker(Tracker):
         if self._position.quantity > 0:
             if self.take and bid >= self.take:
                 self.debug(f' -> [{quote_time}] take long [{self._instrument}] at {bid:.5f}')
-                self.times_to_take.append(quote_time - self._last_trade_time)
+                self.times_to_take.append(quote_time - self._service.last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_takes += 1
                 self.last_triggered_event = 'take'
@@ -51,7 +52,7 @@ class TakeStopTracker(Tracker):
 
             if self.stop and ask <= self.stop:
                 self.debug(f' -> [{quote_time}] stop long [{self._instrument}] at {ask:.5f}')
-                self.times_to_stop.append(quote_time - self._last_trade_time)
+                self.times_to_stop.append(quote_time - self._service.last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_stops += 1
                 self.last_triggered_event = 'stop'
@@ -60,7 +61,7 @@ class TakeStopTracker(Tracker):
         if self._position.quantity < 0:
             if self.take and ask <= self.take:
                 self.debug(f' -> [{quote_time}] take short [{self._instrument}] at {ask:.5f}')
-                self.times_to_take.append(quote_time - self._last_trade_time)
+                self.times_to_take.append(quote_time - self._service.last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_takes += 1
                 self.last_triggered_event = 'take'
@@ -68,7 +69,7 @@ class TakeStopTracker(Tracker):
 
             if self.stop and bid >= self.stop:
                 self.debug(f' -> [{quote_time}] stop short [{self._instrument}] at {bid:.5f}')
-                self.times_to_stop.append(quote_time - self._last_trade_time)
+                self.times_to_stop.append(quote_time - self._service.last_trade_time)
                 self.trade(quote_time, 0)
                 self.n_stops += 1
                 self.last_triggered_event = 'stop'
@@ -82,6 +83,21 @@ class TakeStopTracker(Tracker):
             'average_time_to_stop': np.mean(self.times_to_stop) if self.times_to_stop else np.nan,
         }
 
+
+class TimeExpirationTracker(Tracker):
+    """
+    Expiration exits
+    """
+    def __init__(self, timeout, debug=False):
+        self.timeout = pd.Timedelta(timeout)
+        self.debug = debug
+
+    def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
+        if self._position.quantity != 0 and quote_time - self._service.last_trade_time >= self.timeout:
+            if self.debug:
+                print(f' > {self._instrument} position {self._position.quantity} is expired at {quote_time}')
+            self.trade(quote_time, 0)
+            
 
 class ProgressionTracker(Tracker):
     pass
@@ -233,7 +249,7 @@ class TurtleTracker(TakeStopTracker):
             self._n_entries = 0
             t_size = 0
             self.debug(f'[{signal_time}] -> Close in profit {self._instrument} @ {bid if position > 0 else ask}')
-            self.times_to_take.append(signal_time - self._last_trade_time)
+            self.times_to_take.append(signal_time - self._service.last_trade_time)
             self.n_takes += 1
 
         return t_size
@@ -285,3 +301,16 @@ class DispatchTracker(Tracker):
         # call handler if it's not service quote
         if not is_service_quote and self.active_tracker is not None:
             self.active_tracker.on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
+
+
+class CompoundTracker(Tracker):
+    def __init__(self, *trackers):
+        self.trackers = [t for t in trackers if isinstance(t, Tracker)]
+
+    def setup(self, service):
+        for t in self.trackers:
+            t.setup(service)
+
+    def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
+        for t in self.trackers:
+            t.update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
