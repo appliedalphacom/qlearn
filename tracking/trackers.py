@@ -237,3 +237,51 @@ class TurtleTracker(TakeStopTracker):
             self.n_takes += 1
 
         return t_size
+
+
+class DispatchTracker(Tracker):
+    """
+    Dispatching tracker
+    """
+
+    def __init__(self, trackers: Dict[str, Tracker], active_tracker: str, flat_position_on_activate=False, debug=False):
+        self.trackers = trackers
+        self.active_tracker = None
+        self.flat_position_on_activate = flat_position_on_activate
+
+        if active_tracker is not None:
+            if active_tracker not in trackers:
+                raise ValueError(f"Tracker '{active_tracker}' specified as active not found in trackers dict !")
+
+            # active tracker
+            self.active_tracker = trackers[active_tracker]
+            self.debug(f' .-> {active_tracker} tracker is activated')
+
+        if debug:
+            self.debug = print
+
+    def debug(self, *args, **kwargs):
+        pass
+
+    def setup(self, service):
+        for t in self.trackers.values():
+            t.setup(service)
+
+    def on_info(self, info_time, info_data, **kwargs):
+        if info_data in self.trackers:
+            n_tracker = self.trackers[info_data]
+            if self.flat_position_on_activate and n_tracker != self.active_tracker:
+                self.debug(f' .-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
+                n_tracker.trade(info_time, 0)
+
+            self.active_tracker = self.trackers[info_data]
+            self.debug(f' .-> [{info_time}] {info_data} tracker is activated')
+
+    def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
+        # update series in all trackers
+        for t in self.trackers.values():
+            t._update_series(quote_time, bid, ask, bid_size, ask_size)
+
+        # call handler if it's not service quote
+        if not is_service_quote and self.active_tracker is not None:
+            self.active_tracker.on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
