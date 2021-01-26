@@ -89,13 +89,32 @@ class ProgressionTracker(Tracker):
 
 class TurtleTracker(TakeStopTracker):
     """
-    Our modifiaction of turtles money managenet algo
+    Our modifiction of turtles money management system
     """
     def __init__(self,
                  account_size, dollar_per_point, max_units=4, risk_capital_pct=0.01, reinvest_pnl_pct=0,
                  contract_size=100, max_allowed_contracts=200,
                  atr_timeframe='1d', pull_stops_on_incr=False, after_lose_only=False, debug=False):
         """
+        Turtles strategy position tracking
+        ----------------------------------
+
+        >>> from sklearn.base import TransformerMixin
+        >>> from sklearn.pipeline import make_pipeline
+        >>> b_e1h = MarketDataComposer(make_pipeline(RollingRange('1h', 10), RangeBreakoutDetector()),
+        >>>                                          SingleInstrumentPicker(), None).fit(data, None).predict(data)
+        >>> b_x1h = MarketDataComposer(make_pipeline(RollingRange('1h', 6), RangeBreakoutDetector()),
+        >>>                                          SingleInstrumentPicker(), None).fit(data, None).predict(data)
+        >>> s1h = shift_signals(srows(1 * b_e1h, 2 * b_x1h), '4M59Sec')
+        >>> p1h = z_backtest(s1h, data, 'crypto_futures', spread=0.5, execution_logger=True,
+        >>>                  trackers=TurtleTracker(3000, None, max_units=4, risk_capital_pct=0.05,
+        >>>                                         atr_timeframe='1h',
+        >>>                                         max_allowed_contracts=1000, pull_stops_on_incr=True, debug=False))
+
+        It processes signals as following:
+          - signals in [-1, +1] designated for open positions
+          - signals in [-2, +2] designated for positions closing
+
         :param accoun_size: starting amount in USD
         :param dollar_per_point: price of 1 point (for example 12.5 for ES mini) if none crypto sizing would be used
         :param max_untis: maximal number of position inreasings
@@ -105,7 +124,7 @@ class TurtleTracker(TakeStopTracker):
         :param max_allowed_contracts: maximal allowed contracts to trade
         :param atr_timeframe: timeframe of ATR calculations
         :param pull_stops_on_incr: if true it pull up stop on position's increasing
-        :param after_lose_only: if true
+        :param after_lose_only: if true it's System1 otherwise System2
         :param debug: if true it prints debug messages
         """
         super().__init__(debug)
@@ -201,11 +220,12 @@ class TurtleTracker(TakeStopTracker):
                 self._last_entry_price = ask if s_direction > 0 else bid
                 t_size = self.calculate_trade_size(s_direction, self.N, self._last_entry_price)
                 self.stop_at(signal_time, self._last_entry_price - self.N * 2 * s_direction)
-                self.last_triggered_event = None
                 self._n_entries = 1
                 self.debug(
                     f'\t[{signal_time}] -> [#{self._n_entries}] {self._instrument} {t_size} @ '
                     f'{self._last_entry_price:.2f} x {self.stop:.2f}')
+            # clear previous state
+            self.last_triggered_event = None
 
         # when we got to exit signal
         if (position > 0 and signal == -2) or (position < 0 and signal == +2):
