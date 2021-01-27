@@ -32,20 +32,20 @@ class TakeStopTracker(Tracker):
     def take_at(self, trade_time, take_price: float):
         self.take = take_price
 
-    def trade(self, trade_time, quantity):
+    def trade(self, trade_time, quantity, comment=''):
         if quantity == 0:
             self.stop = None
             self.take = None
 
         # call super method
-        super().trade(trade_time, quantity)
+        super().trade(trade_time, quantity, comment)
 
     def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
         if self._position.quantity > 0:
             if self.take and bid >= self.take:
                 self.debug(f' -> [{quote_time}] take long [{self._instrument}] at {bid:.5f}')
                 self.times_to_take.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0)
+                self.trade(quote_time, 0, f'take long at {bid}')
                 self.n_takes += 1
                 self.last_triggered_event = 'take'
                 return
@@ -53,7 +53,7 @@ class TakeStopTracker(Tracker):
             if self.stop and ask <= self.stop:
                 self.debug(f' -> [{quote_time}] stop long [{self._instrument}] at {ask:.5f}')
                 self.times_to_stop.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0)
+                self.trade(quote_time, 0, f'stop long at {ask}')
                 self.n_stops += 1
                 self.last_triggered_event = 'stop'
                 return
@@ -62,7 +62,7 @@ class TakeStopTracker(Tracker):
             if self.take and ask <= self.take:
                 self.debug(f' -> [{quote_time}] take short [{self._instrument}] at {ask:.5f}')
                 self.times_to_take.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0)
+                self.trade(quote_time, 0, f'take short at {ask}')
                 self.n_takes += 1
                 self.last_triggered_event = 'take'
                 return
@@ -70,7 +70,7 @@ class TakeStopTracker(Tracker):
             if self.stop and bid >= self.stop:
                 self.debug(f' -> [{quote_time}] stop short [{self._instrument}] at {bid:.5f}')
                 self.times_to_stop.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0)
+                self.trade(quote_time, 0, f'stop short at {bid}')
                 self.n_stops += 1
                 self.last_triggered_event = 'stop'
                 return
@@ -206,8 +206,11 @@ class TurtleTracker(TakeStopTracker):
                 t_size = self.calculate_trade_size(np.sign(pos), self.N, self._last_entry_price)
                 self._n_entries += 1
 
+                # new position
+                new_pos = pos + t_size
+
                 # increase inventory
-                self.trade(quote_time, pos + t_size)
+                self.trade(quote_time, new_pos, f'increased position to {new_pos} at {self._last_entry_price}')
 
                 # average position price
                 avg_price = self._position.cost_usd / abs(self._position.quantity)
@@ -218,7 +221,7 @@ class TurtleTracker(TakeStopTracker):
 
                 self.debug(
                     f"\t[{quote_time}] -> [#{self._n_entries}] {self._instrument} <{avg_price:.2f}> increasing to "
-                    f"{pos + t_size} @ {self._last_entry_price} x {self.stop:.2f}")
+                    f"{new_pos} @ {self._last_entry_price} x {self.stop:.2f}")
 
         # call stop/take tracker to process sl/tp if need
         super().on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
@@ -288,7 +291,7 @@ class DispatchTracker(Tracker):
             n_tracker = self.trackers[info_data]
             if self.flat_position_on_activate and n_tracker != self.active_tracker:
                 self.debug(f' .-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
-                n_tracker.trade(info_time, 0)
+                n_tracker.trade(info_time, 0, f'<{info_data}> activated and flat position')
 
             self.active_tracker = self.trackers[info_data]
             self.debug(f' .-> [{info_time}] {info_data} tracker is activated')
@@ -302,6 +305,11 @@ class DispatchTracker(Tracker):
         if not is_service_quote and self.active_tracker is not None:
             self.active_tracker.on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
 
+    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+        if self.active_tracker:
+            return self.active_tracker.on_signal(signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size)
+        return signal_qty
+
 
 class CompoundTracker(Tracker):
     def __init__(self, *trackers):
@@ -314,3 +322,21 @@ class CompoundTracker(Tracker):
     def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
         for t in self.trackers:
             t.update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
+
+    def on_info(self, info_time, info_data, **kwargs):
+        for t in self.trackers:
+            t.on_info(info_time, info_data, **kwargs)
+
+    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+        """
+        Callback on new signal
+        """
+        processed_signal = signal_qty
+        for t in self.trackers:
+            processed_signal = t.on_signal(signal_time, processed_signal, quote_time, bid, ask, bid_size, ask_size)
+
+            # if some tracker shutdowns signal we break the chain
+            if processed_signal is None or np.isnan(processed_signal):
+                break
+
+        return processed_signal
