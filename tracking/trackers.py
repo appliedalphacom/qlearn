@@ -283,18 +283,19 @@ class DispatchTracker(Tracker):
         pass
 
     def setup(self, service):
+        super().setup(service)
         for t in self.trackers.values():
             t.setup(service)
 
     def on_info(self, info_time, info_data, **kwargs):
         if info_data in self.trackers:
             n_tracker = self.trackers[info_data]
-            if self.flat_position_on_activate and n_tracker != self.active_tracker:
-                self.debug(f' .-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
+            if self.flat_position_on_activate and n_tracker != self.active_tracker and self._position.quantity != 0:
+                self.debug(f' [D]-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
                 n_tracker.trade(info_time, 0, f'<{info_data}> activated and flat position')
 
             self.active_tracker = self.trackers[info_data]
-            self.debug(f' .-> [{info_time}] {info_data} tracker is activated')
+            self.debug(f' [D]-> [{info_time}] {info_data} tracker is activated')
 
     def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
         # update series in all trackers
@@ -336,6 +337,7 @@ class PipelineTracker(Tracker):
         self.trackers = [t for t in trackers if isinstance(t, Tracker)]
 
     def setup(self, service):
+        super().setup(service)
         for t in self.trackers:
             t.setup(service)
 
@@ -346,6 +348,10 @@ class PipelineTracker(Tracker):
     def on_info(self, info_time, info_data, **kwargs):
         for t in self.trackers:
             t.on_info(info_time, info_data, **kwargs)
+
+    def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
+        for t in self.trackers:
+            t.on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
 
     def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
         """
