@@ -39,6 +39,7 @@ class Trackers_test(unittest.TestCase):
             '2020-08-17 04:10:00': {'EURUSD': 'regime:trend'},
             '2020-08-17 04:19:59': {'EURUSD': +1},
             '2020-08-17 14:19:59': {'EURUSD': -1},
+            '2020-08-17 14:55:59': {'EURUSD': +1},  # this should be flat !
             '2020-08-17 15:00:00': {'EURUSD': 'regime:mr'},
             '2020-08-17 18:19:59': {'EURUSD': 1},
             '2020-08-17 22:19:59': {'EURUSD': 0},
@@ -60,6 +61,8 @@ class Trackers_test(unittest.TestCase):
         print(p.executions)
 
         self.assertListEqual(
-            ['stop long at 1.18445', 'stop short at 1.1879499999999998',
+            ['stop long at 1.18445',
+             'stop short at 1.1879499999999998',
+             '<regime:mr> activated and flat position',
              'TimeExpirationTracker:: position 10000 is expired'],
             list(filter(lambda x: x != '', p.executions.comment.values)))
