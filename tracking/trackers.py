@@ -96,7 +96,7 @@ class TimeExpirationTracker(Tracker):
         if self._position.quantity != 0 and quote_time - self._service.last_trade_time >= self.timeout:
             if self.debug:
                 print(f' > {self._instrument} position {self._position.quantity} is expired at {quote_time}')
-            self.trade(quote_time, 0)
+            self.trade(quote_time, 0, f'TimeExpirationTracker:: position {self._position.quantity} is expired')
             
 
 class ProgressionTracker(Tracker):
@@ -312,6 +312,26 @@ class DispatchTracker(Tracker):
 
 
 class PipelineTracker(Tracker):
+    """
+    Provides ability to make pipeline of trackers
+
+    >>> class MyTracker(Tracker):
+    >>>     def __init__(self, size):
+    >>>         self.size = size
+    >>>
+    >>>    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+    >>>        return signal_qty * self.size
+    >>>
+    >>> s = pd.DataFrame.from_dict({
+    >>>     pd.Timestamp('2020-08-17 04:19:59'): {'EURUSD': +1},
+    >>>     pd.Timestamp('2020-08-21 14:19:59'): {'EURUSD': -1},
+    >>>     pd.Timestamp('2020-08-30 14:19:59'): {'EURUSD':  0}}, orient='index')
+    >>> p = z_backtest(s, {'EURUSD': data}, 'forex', spread=0.0, execution_logger=True,
+    >>>                trackers = PipelineTracker(
+    >>>                   TimeExpirationTracker('1h', True),
+    >>>                   MyTracker(10000))
+    >>>          )
+    """
     def __init__(self, *trackers):
         self.trackers = [t for t in trackers if isinstance(t, Tracker)]
 
