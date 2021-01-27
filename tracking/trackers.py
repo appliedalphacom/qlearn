@@ -311,7 +311,7 @@ class DispatchTracker(Tracker):
         return signal_qty
 
 
-class CompoundTracker(Tracker):
+class PipelineTracker(Tracker):
     def __init__(self, *trackers):
         self.trackers = [t for t in trackers if isinstance(t, Tracker)]
 
