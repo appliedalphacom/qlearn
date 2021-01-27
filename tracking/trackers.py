@@ -161,6 +161,7 @@ class TurtleTracker(TakeStopTracker):
     def initialize(self):
         self.days = self.get_ohlc_series(self.atr_timeframe)
         self.N = None
+        self.__init_days_counted = 1
         self.__TR_init_sum = 0
         self._n_entries = 0
         self._last_entry_price = np.nan
@@ -180,18 +181,18 @@ class TurtleTracker(TakeStopTracker):
         return self._calculate_trade_size_on_dollar_cost(direction, vlt, price)
 
     def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
-        daily, n_days = self.days, len(self.days)
+        daily = self.days
         today, yest = daily[1], daily[2]
 
         if yest is None or today is None:
             return
 
         if daily.is_new_bar:
-            now_date = daily[0].time
             TR = max(today.high - today.low, today.high - yest.close, yest.close - today.low)
             if self.N is None:
-                if n_days <= 21:
+                if self.__init_days_counted <= 21:
                     self.__TR_init_sum += TR
+                    self.__init_days_counted += 1
                 else:
                     self.N = self.__TR_init_sum / 19
             else:
@@ -291,14 +292,13 @@ class DispatchTracker(Tracker):
     def on_info(self, info_time, info_data, **kwargs):
         if info_data in self.trackers:
             n_tracker = self.trackers[info_data]
+            mesg = ''
             if self.flat_position_on_activate and n_tracker != self.active_tracker and self._position.quantity != 0:
-                # tracker may be empty
-                if n_tracker:
-                    self.debug(f' [D]-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
-                    n_tracker.trade(info_time, 0, f'<{info_data}> activated and flat position')
+                self.trade(info_time, 0, f'<{info_data}> activated and flat position')
+                mesg = ' position is closed'
 
             self.active_tracker = n_tracker
-            self.debug(f' [D]-> [{info_time}] {info_data} tracker is activated')
+            self.debug(f' [D]-> [{info_time}] {info_data} tracker is activated {mesg}')
 
     def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
         # update series in all trackers
