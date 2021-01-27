@@ -292,16 +292,17 @@ class DispatchTracker(Tracker):
         if info_data in self.trackers:
             n_tracker = self.trackers[info_data]
             if self.flat_position_on_activate and n_tracker != self.active_tracker and self._position.quantity != 0:
-                self.debug(f' [D]-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
-                n_tracker.trade(info_time, 0, f'<{info_data}> activated and flat position')
+                # tracker may be empty
+                if n_tracker:
+                    self.debug(f' [D]-> [{info_time}] {info_data} flat position for {n_tracker._instrument}')
+                    n_tracker.trade(info_time, 0, f'<{info_data}> activated and flat position')
 
-            self.active_tracker = self.trackers[info_data]
+            self.active_tracker = n_tracker
             self.debug(f' [D]-> [{info_time}] {info_data} tracker is activated')
 
     def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
         # update series in all trackers
-        for t in self.trackers.values():
-            t._update_series(quote_time, bid, ask, bid_size, ask_size)
+        [t._update_series(quote_time, bid, ask, bid_size, ask_size) for t in self.trackers.values() if t]
 
         # call handler if it's not service quote
         if not is_service_quote and self.active_tracker is not None:

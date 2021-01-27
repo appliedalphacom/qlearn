@@ -42,7 +42,9 @@ class Trackers_test(unittest.TestCase):
             '2020-08-17 14:55:59': {'EURUSD': +1},  # this should be flat !
             '2020-08-17 15:00:00': {'EURUSD': 'regime:mr'},
             '2020-08-17 18:19:59': {'EURUSD': 1},
-            '2020-08-17 22:19:59': {'EURUSD': 0},
+            '2020-08-17 20:19:59': {'EURUSD': 'empty'},
+            '2020-08-17 20:24:59': {'EURUSD': 1},  # this should be passed !
+            '2020-08-17 23:19:59': {'EURUSD': 0},
         }, orient='index')
         s.index = pd.DatetimeIndex(s.index)
 
@@ -53,8 +55,8 @@ class Trackers_test(unittest.TestCase):
                                'regime:mr': PipelineTracker(
                                    TimeExpirationTracker('1h', True),
                                    MyFixedPositionTracker(10000)
-                               )
-
+                               ),
+                               'empty': None
                            }, None, flat_position_on_activate=True, debug=True)
                        )
 
