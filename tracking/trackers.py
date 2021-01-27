@@ -285,7 +285,8 @@ class DispatchTracker(Tracker):
     def setup(self, service):
         super().setup(service)
         for t in self.trackers.values():
-            t.setup(service)
+            if t and hasattr(t, 'setup'):
+                t.setup(service)
 
     def on_info(self, info_time, info_data, **kwargs):
         if info_data in self.trackers:
