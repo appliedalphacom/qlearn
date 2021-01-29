@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 
+from qlearn.core.utils import debug_output
+
 
 class ForwardReturns:
     """
@@ -46,7 +48,7 @@ class ForwardReturns:
 
         return rets.fillna(0).rename('returns')
 
-    def _get_series_for_returns(self, x_data, r_data, used_price, **kwargs):
+    def _get_series_for_returns(self, x_data, r_data, column_name, **kwargs):
         if isinstance(x_data, pd.DataFrame):
 
             # we got portfolio data here
@@ -56,18 +58,18 @@ class ForwardReturns:
 
                 r_tmp = r_data
                 if isinstance(r_data, pd.DataFrame):
-                    if used_price in r_data.columns:
-                        r_tmp = r_data[used_price]
+                    if column_name in r_data.columns:
+                        r_tmp = r_data[column_name]
                     else:
-                        raise ValueError(f">>> Can't find '{used_price}' in returns data !!!")
+                        raise ValueError(f">>> Can't find '{column_name}' in returns data !!!")
 
                 # we will use data from r_data reindexed on prices index
                 return r_tmp.reindex(x_data.index).ffill()
 
-            if used_price not in x_data.columns:
-                raise ValueError(f'Data must contain "{used_price}" column !')
+            if column_name not in x_data.columns:
+                raise ValueError(f'Data must contain "{column_name}" column !')
 
-            return x_data[used_price]
+            return x_data[column_name]
 
         return None
 
@@ -83,13 +85,22 @@ class ForwardReturnsDirection(ForwardReturns):
     Forward return's direction classificator (only Up (+1) or Down (-1))
     """
 
-    def __init__(self, horizon):
+    def __init__(self, horizon, debug=False):
         super(ForwardReturnsDirection, self).__init__(horizon, 'abs')
+        self.__debug = debug
 
     def transform(self, x_data, r_data, used_price='close', **kwargs):
         series_for_ret = self._get_series_for_returns(x_data, r_data, used_price, **kwargs)
+
+        if self.__debug:
+            debug_output(x_data, 'X_data')
+            debug_output(r_data, 'R_data')
+
         if series_for_ret is not None:
-            return np.sign(self._forward_returns(series_for_ret))
+            fwd_rets = np.sign(self._forward_returns(series_for_ret))
+            if self.__debug:
+                debug_output(fwd_rets, 'fwd_rets')
+            return fwd_rets
 
         raise ValueError("Can't transform returns !")
 
