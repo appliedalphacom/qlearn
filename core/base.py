@@ -1,15 +1,15 @@
-import pandas as pd
 import numpy as np
-import inspect
 import copy
+import inspect
+from typing import Union, List, Dict
+
+import numpy as np
 from dataclasses import dataclass
-from typing import Union, List, Set, Dict
+from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, ClusterMixin, DensityMixin
 
-from sklearn.base import BaseEstimator, RegressorMixin, clone, ClassifierMixin, ClusterMixin, DensityMixin
-
-from qlearn.core.utils import debug_output
-from qlearn.core.pickers import AbstractDataPicker
 from qlearn.core.data_utils import make_dataframe_from_dict
+from qlearn.core.pickers import AbstractDataPicker
+from qlearn.core.utils import debug_output
 
 
 class MarketDataComposer(BaseEstimator):
@@ -36,12 +36,15 @@ class MarketDataComposer(BaseEstimator):
         self._propagate_prediction = False
         self._fill_by = None
         self._forward = False
-        if align_prediction_by in ['ffill', 'forward']:
-            self._propagate_prediction = True
-            self._forward = True
-        elif isinstance(align_prediction_by, (int, float)) or np.isnan(align_prediction_by):
-            self._propagate_prediction = True
-            self._fill_by = align_prediction_by
+        if align_prediction_by is not None:
+            if align_prediction_by in ['ffill', 'forward']:
+                self._propagate_prediction = True
+                self._forward = True
+            elif isinstance(align_prediction_by, (int, float)) or np.isnan(align_prediction_by):
+                self._propagate_prediction = True
+                self._fill_by = align_prediction_by
+            else:
+                print(f'WARN: not sure how to deal with passed align_prediction_by="{align_prediction_by}"')
 
     def take(self, data, nth: Union[str, int] = 0):
         """
@@ -176,4 +179,3 @@ class BasicMarketEstimator(BaseEstimator):
 
     def as_density(self):
         return BasicMarketEstimator.mix_with(self, DensityMixin)
-
