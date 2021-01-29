@@ -18,7 +18,6 @@ class MarketDataComposer(BaseEstimator):
                  transformer=None,
                  column='close',
                  timeframe=None,
-                 align_prediction_by=None,
                  debug=False,
                  ):
         self.column = column
@@ -31,20 +30,6 @@ class MarketDataComposer(BaseEstimator):
         self.symbols_ = []
         self.best_params_ = None
         self.best_score_ = None
-
-        # how to deal with predictions
-        self._propagate_prediction = False
-        self._fill_by = None
-        self._forward = False
-        if align_prediction_by is not None:
-            if align_prediction_by in ['ffill', 'forward']:
-                self._propagate_prediction = True
-                self._forward = True
-            elif isinstance(align_prediction_by, (int, float)) or np.isnan(align_prediction_by):
-                self._propagate_prediction = True
-                self._fill_by = align_prediction_by
-            else:
-                print(f'WARN: not sure how to deal with passed align_prediction_by="{align_prediction_by}"')
 
     def take(self, data, nth: Union[str, int] = 0):
         """
@@ -110,15 +95,6 @@ class MarketDataComposer(BaseEstimator):
                 raise ValueError(f"It seems that predictor was not trained for '{p_key}' !")
 
             yh = self.fitted_predictors_[p_key].predict(xp)
-
-            # if we use it for model fitting we need to have consistent prediction series
-            if self._propagate_prediction:
-                yh = yh.reindex(xp.index)
-            if self._fill_by is not None:
-                yh = yh.fillna(self._fill_by)
-            if self._forward:
-                yh = yh.ffill()
-
             if isinstance(symbol, str):
                 r[symbol] = yh
             else:
@@ -179,3 +155,37 @@ class BasicMarketEstimator(BaseEstimator):
 
     def as_density(self):
         return BasicMarketEstimator.mix_with(self, DensityMixin)
+
+    def forward(self):
+        return PredictionPostprocessor(self, None, True)
+
+    def fillna(self, na):
+        return PredictionPostprocessor(self, na, False)
+
+
+class PredictionPostprocessor(BasicMarketEstimator):
+    def __init__(self, other_, fill_by_=0, forward_=False):
+        self.other_ = other_
+        self.fill_by_ = fill_by_
+        self.forward_ = forward_
+        self.need_reindex_ = (fill_by_ is not None) or forward_
+
+    def fit(self, X, y, **fit_params):
+        self.other_.fit(X, y, **fit_params)
+        return self
+
+    def predict(self, X):
+        yh = self.other_.predict(X)
+        if self.need_reindex_:
+            yh = yh.reindex(X.index)
+        if self.forward_:
+            yh = yh.ffill()
+        if self.fill_by_ is not None:
+            yh = yh.fillna(self.fill_by_)
+        return yh
+
+    def forward(self):
+        return PredictionPostprocessor(self.other_, self.fill_by_, True)
+
+    def fillna(self, na):
+        return PredictionPostprocessor(self.other_, na, self.forward_)
