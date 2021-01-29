@@ -45,10 +45,11 @@ def _wrap_single_list(param_grid: Union[List, Dict]):
     as_list = lambda x: x if isinstance(x, (tuple, list, dict, np.ndarray)) else [x]
     if isinstance(param_grid, list):
         return [_wrap_single_list(ps) for ps in param_grid]
-    return {k: as_list(v) for k,v in param_grid.items()}
+    return {k: as_list(v) for k, v in param_grid.items()}
 
 
-def permutate_params(parameters: dict, conditions: Union[types.FunctionType, list, tuple] = None, wrap_as_list=True) -> List[Dict]:
+def permutate_params(parameters: dict, conditions: Union[types.FunctionType, list, tuple] = None, wrap_as_list=True) -> \
+List[Dict]:
     """
     Generate list of all permutations for given parameters and it's possible values
 
@@ -105,3 +106,15 @@ def permutate_params(parameters: dict, conditions: Union[types.FunctionType, lis
     # if we need to follow sklearn rules we should wrap every non iterable as list
     return _wrap_single_list(result) if wrap_as_list else result
 
+
+def debug_output(data, name, start=3, end=3):
+    if isinstance(data, (pd.DataFrame, pd.Series)):
+        hdr = f'.-<{name} {len(data)} records>-' + ' -' * 50
+        sep = ' -' * 50
+        print(hdr[:len(sep)])
+        print(data.head(start).to_string(header=True))
+        print(' \t ...  ')
+        print(data.tail(end).to_string(header=False))
+        print(sep)
+    else:
+        print(data)
