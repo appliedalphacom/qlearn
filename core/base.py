@@ -25,7 +25,7 @@ class MarketDataComposer(BaseEstimator):
         self.transformer = transformer
         self.timeframe = timeframe
         self.picker = picker
-        self.debug_ = debug
+        self.debug = debug
         self.fitted_predictors_ = {}
         self.symbols_ = []
         self.best_params_ = None
@@ -63,7 +63,7 @@ class MarketDataComposer(BaseEstimator):
 
             if self.transformer is not None:
                 yp = self.transformer.transform(xp, y, **fit_params)
-                if self.debug_:
+                if self.debug:
                     debug_output(yp, 'Transformed data')
 
             # set meta data
@@ -76,7 +76,7 @@ class MarketDataComposer(BaseEstimator):
                 self.best_score_[str(symbol)] = _f_p.best_score_
 
                 # just some output on unclear situations
-                if self.debug_:
+                if self.debug:
                     print(symbol, _f_p.best_params_)
 
             # here we need to keep a copy of fitted object
