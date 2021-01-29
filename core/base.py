@@ -14,7 +14,7 @@ from qlearn.core.utils import debug_output
 
 class MarketDataComposer(BaseEstimator):
     def __init__(self, predictor,
-                 data_picker: AbstractDataPicker,
+                 picker: AbstractDataPicker,
                  transformer=None,
                  column='close',
                  timeframe=None,
@@ -24,7 +24,7 @@ class MarketDataComposer(BaseEstimator):
         self.predictor = predictor
         self.transformer = transformer
         self.timeframe = timeframe
-        self.picker = data_picker
+        self.picker = picker
         self.debug_ = debug
         self.fitted_predictors_ = {}
         self.symbols_ = []
