@@ -89,25 +89,32 @@ class TimeExpirationTracker(Tracker):
     """
     Expiration exits
     """
+
     def __init__(self, timeout, debug=False):
         self.timeout = pd.Timedelta(timeout)
         self.debug = debug
 
     def initialize(self):
-        self.n_expired_ = 0
+        self.n_expired_profit_ = 0
+        self.n_expired_loss_ = 0
 
     def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
         if self._position.quantity != 0 and quote_time - self._service.last_trade_time >= self.timeout:
             if self.debug:
                 print(f' > {self._instrument} position {self._position.quantity} is expired at {quote_time}')
-            self.trade(quote_time, 0, f'TimeExpirationTracker:: position {self._position.quantity} is expired')
-            self.n_expired_ += 1
+            pnl = self.trade(quote_time, 0, f'TimeExpirationTracker:: position {self._position.quantity} is expired')
+            if pnl > 0:
+                self.n_expired_profit_ += 1
+            elif pnl < 0:
+                self.n_expired_loss_ += 1
 
     def statistics(self) -> Dict:
         return {
-            'expired': self.n_expired_
+            'expired': self.n_expired_loss_ + self.n_expired_profit_,
+            'expired_profitable': self.n_expired_profit_,
+            'expired_loss': self.n_expired_loss_
         }
-            
+
 
 class ProgressionTracker(Tracker):
     pass
@@ -117,6 +124,7 @@ class TurtleTracker(TakeStopTracker):
     """
     Our modifiction of turtles money management system
     """
+
     def __init__(self,
                  account_size, dollar_per_point, max_units=4, risk_capital_pct=0.01, reinvest_pnl_pct=0,
                  contract_size=100, max_allowed_contracts=200,
@@ -363,6 +371,7 @@ class PipelineTracker(Tracker):
     >>>                   MyTracker(10000))
     >>>          )
     """
+
     def __init__(self, *trackers):
         self.trackers = [t for t in trackers if isinstance(t, Tracker)]
 
