@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Dict
 
 import numpy as np
@@ -12,11 +13,6 @@ class TakeStopTracker(Tracker):
     """
 
     def __init__(self, debug=False):
-        self.initialize()
-        if debug:
-            self.debug = print
-
-    def initialize(self):
         self.take = None
         self.stop = None
         self.n_stops = 0
@@ -25,6 +21,8 @@ class TakeStopTracker(Tracker):
         self.times_to_stop = []
         # what is last triggered event: 'stop' or 'take' (None if nothing was triggered yet)
         self.last_triggered_event = None
+        if debug:
+            self.debug = print
 
     def debug(self, *args, **kwargs):
         pass
@@ -270,6 +268,10 @@ class TurtleTracker(TakeStopTracker):
 
         return t_size
 
+    def statistics(self) -> Dict:
+        r = dict()
+        return r
+
 
 class DispatchTracker(Tracker):
     """
@@ -281,6 +283,9 @@ class DispatchTracker(Tracker):
         self.active_tracker = None
         self.flat_position_on_activate = flat_position_on_activate
 
+        # statistics
+        self.n_activations_ = defaultdict(lambda: 0)
+
         if active_tracker is not None:
             if active_tracker not in trackers:
                 raise ValueError(f"Tracker '{active_tracker}' specified as active not found in trackers dict !")
@@ -288,6 +293,7 @@ class DispatchTracker(Tracker):
             # active tracker
             self.active_tracker = trackers[active_tracker]
             self.debug(f' .-> {active_tracker} tracker is activated')
+            self.n_activations_[active_tracker] += 1
 
         if debug:
             self.debug = print
@@ -311,6 +317,7 @@ class DispatchTracker(Tracker):
 
             self.active_tracker = n_tracker
             self.debug(f' [D]-> [{info_time}] {info_data} tracker is activated {mesg}')
+            self.n_activations_[info_data] += 1
 
     def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
         # update series in all trackers
@@ -326,11 +333,12 @@ class DispatchTracker(Tracker):
         return signal_qty
 
     def statistics(self) -> Dict:
-        r = dict()
+        r = dict(self.n_activations_)
         for t in self.trackers.values():
-            s = t.statistics()
-            if s is not None:
-                r.update(s)
+            if t is not None:
+                s = t.statistics()
+                if s is not None:
+                    r.update(s)
         return r
 
 

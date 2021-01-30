@@ -61,6 +61,7 @@ class Trackers_test(unittest.TestCase):
                        )
 
         print(p.executions)
+        print(p.trackers_stat)
 
         self.assertListEqual(
             ['stop long at 1.18445',
