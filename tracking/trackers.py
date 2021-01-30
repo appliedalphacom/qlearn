@@ -12,6 +12,11 @@ class TakeStopTracker(Tracker):
     """
 
     def __init__(self, debug=False):
+        self.initialize()
+        if debug:
+            self.debug = print
+
+    def initialize(self):
         self.take = None
         self.stop = None
         self.n_stops = 0
@@ -20,8 +25,6 @@ class TakeStopTracker(Tracker):
         self.times_to_stop = []
         # what is last triggered event: 'stop' or 'take' (None if nothing was triggered yet)
         self.last_triggered_event = None
-        if debug:
-            self.debug = print
 
     def debug(self, *args, **kwargs):
         pass
@@ -92,11 +95,20 @@ class TimeExpirationTracker(Tracker):
         self.timeout = pd.Timedelta(timeout)
         self.debug = debug
 
+    def initialize(self):
+        self.n_expired_ = 0
+
     def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
         if self._position.quantity != 0 and quote_time - self._service.last_trade_time >= self.timeout:
             if self.debug:
                 print(f' > {self._instrument} position {self._position.quantity} is expired at {quote_time}')
             self.trade(quote_time, 0, f'TimeExpirationTracker:: position {self._position.quantity} is expired')
+            self.n_expired_ += 1
+
+    def statistics(self) -> Dict:
+        return {
+            'expired': self.n_expired_
+        }
             
 
 class ProgressionTracker(Tracker):
@@ -313,6 +325,14 @@ class DispatchTracker(Tracker):
             return self.active_tracker.on_signal(signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size)
         return signal_qty
 
+    def statistics(self) -> Dict:
+        r = dict()
+        for t in self.trackers.values():
+            s = t.statistics()
+            if s is not None:
+                r.update(s)
+        return r
+
 
 class PipelineTracker(Tracker):
     """
@@ -368,3 +388,11 @@ class PipelineTracker(Tracker):
                 break
 
         return processed_signal
+
+    def statistics(self) -> Dict:
+        r = dict()
+        for t in self.trackers:
+            s = t.statistics()
+            if s is not None:
+                r.update(s)
+        return r
