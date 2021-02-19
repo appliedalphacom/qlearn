@@ -6,6 +6,11 @@ from itertools import product
 import types
 
 
+def _check_frame_columns(x, *args):
+    if not (isinstance(x, pd.DataFrame) and sum(x.columns.isin(args)) == len(args)):
+        raise ValueError(f"Input series must be DataFrame with {args} columns !")
+
+
 def infer_series_frequency(series):
     """
     Infer frequency of given timeseries
@@ -26,14 +31,6 @@ def infer_series_frequency(series):
     idx = np.concatenate((np.where(diff)[0], [len(values)]))
     freqs = dict(zip(values[idx[:-1]], np.diff(idx)))
     return timedelta(seconds=max(freqs, key=freqs.get))
-
-
-def crossup(x, t):
-    return x[(x > t) & (x.shift(1) <= t)].index
-
-
-def crossdown(x, t):
-    return x[(x < t) & (x.shift(1) >= t)].index
 
 
 def _wrap_single_list(param_grid: Union[List, Dict]):
