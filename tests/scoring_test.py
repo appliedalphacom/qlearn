@@ -65,8 +65,8 @@ class ScoringTests(unittest.TestCase):
         print(g1.best_score_)
 
     def test_scorer_open_close(self):
-        # data = ohlc_resample(pd.read_csv('data/ES.csv.gz', parse_dates=True, index_col=['time']), '5Min')
-        data = ohlc_resample(pd.read_csv('c:/data/ohlc/ES.csv.gz', parse_dates=True, index_col=['time']), '5Min')
+        data = ohlc_resample(pd.read_csv('data/ES.csv.gz', parse_dates=True, index_col=['time']), '5Min')
+        # data = ohlc_resample(pd.read_csv('c:/data/ohlc/ES.csv.gz', parse_dates=True, index_col=['time']), '5Min')
 
         bs = make_pipeline(RollingRange('1H', 12), RangeBreakoutDetector())
         m2 = MarketDataComposer(bs, SingleInstrumentPicker(), None, debug=True)
@@ -80,6 +80,32 @@ class ScoringTests(unittest.TestCase):
             param_grid={
                 'rollingrange__period': np.arange(12, 15),
                 'rollingrange__timeframe': ['1H'],
+            }, verbose=True
+        )
+
+        mds = MarketDataComposer(g1, SingleInstrumentPicker(), column='close', debug=True)
+        mds.fit(data, None)
+        print(g1.best_params_)
+        print(g1.best_score_)
+
+    def test_scorer_ticks(self):
+        data = pd.read_csv('data/XBTUSD.csv.gz', parse_dates=True, index_col=['time'])
+
+        bs = make_pipeline(RollingRange('10S', 30, 6), RangeBreakoutDetector(0.5))
+
+        m2 = MarketDataComposer(bs, SingleInstrumentPicker(), None, debug=True)
+        y0 = m2.fit(data, None).predict(data)
+        debug_output(y0, 'TestPrediction')
+
+        g1 = GridSearchCV(
+            n_jobs=10,
+            cv=TimeSeriesSplit(3),
+            estimator=bs,
+            scoring=ForwardDirectionScoring('1Min'),
+            param_grid={
+                'rollingrange__period': np.arange(10, 30),
+                'rollingrange__forward_shift_periods': np.arange(5, 10),
+                'rollingrange__timeframe': ['10S', '15S'],
             }, verbose=True
         )
 

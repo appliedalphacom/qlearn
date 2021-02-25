@@ -19,6 +19,7 @@ class DataType:
     
 
 _S1 = pd.Timedelta('1S')
+_D1 = pd.Timedelta('1D')
 
 
 def pre_close_time_delta(freq):
@@ -28,6 +29,9 @@ def pre_close_time_delta(freq):
 
     TODO: take in account session start/stop times for daily freq
     """
+    if freq >= _D1:
+        raise ValueError('Data with daily frequency is not supported properly yet !')
+
     return _S1 if freq > _S1 else freq / 10
 
 
@@ -218,10 +222,21 @@ def ohlc_to_flat_price_series(ohlc: pd.DataFrame, freq: pd.Timedelta, sess_start
 
 def forward_timeseries(x: pd.Series, period):
     """
-    Forward timeseries for specified time period
+    Forward shifted timeseries for specified time period
     """
     if not isinstance(x, pd.Series):
         raise ValueError('forward_timeseries> Argument must be pd.Series !')
     f_x = x.asof(x.index + period).reset_index(drop=True)
+    f_x.index = x.index
+    return f_x
+
+
+def backward_timeseries(x: pd.Series, period):
+    """
+    Backward shifted timeseries for specified time period
+    """
+    if not isinstance(x, pd.Series):
+        raise ValueError('backward_timeseries> Argument must be pd.Series !')
+    f_x = x.asof(x.index - period).reset_index(drop=True)
     f_x.index = x.index
     return f_x
