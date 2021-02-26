@@ -1,35 +1,109 @@
-import numpy as np
 import copy
 import inspect
+from datetime import timedelta
 from typing import Union, List, Dict
 
 import numpy as np
 from dataclasses import dataclass
-from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, ClusterMixin, DensityMixin
+from sklearn.base import BaseEstimator
+from sklearn.model_selection._search import BaseSearchCV
+from sklearn.pipeline import Pipeline
 
-from qlearn.core.data_utils import make_dataframe_from_dict
+from qlearn.core.data_utils import make_dataframe_from_dict, pre_close_time_shift
 from qlearn.core.pickers import AbstractDataPicker
-from qlearn.core.utils import debug_output
+
+QLEARN_VERSION = '0.0.1'
+
+
+@dataclass
+class MarketInfo:
+    symbols: Union[List[str], None]
+    column: str
+    timezone: str = 'UTC'
+    session_start = timedelta(hours=0, minutes=0)
+    session_end = timedelta(hours=23, minutes=59, seconds=58)
+    tick_sizes: dict = None
+    tick_prices: dict = None
+
+
+def predict_and_postprocess(class_predict_function):
+    def wrapped_predict(obj, xp, *args, **kwargs):
+        # run original predict method
+        yh = class_predict_function(obj, xp, *args, **kwargs)
+
+        # if this predictor doesn't provide tag and we operate with closes
+        if not getattr(obj, 'exact_time', False) and obj.market_info_.column == 'close':
+            yh = yh.shift(1, freq=pre_close_time_shift(xp))
+
+        return yh
+
+    return wrapped_predict
+
+
+def preprocess_fitargs_and_fit(class_fit_function):
+    def wrapped_fit(obj, x, y, **fit_params):
+        # intercept market_info_
+        if 'market_info_' in fit_params:
+            obj.market_info_ = fit_params.pop('market_info_')
+
+        return class_fit_function(obj, x, y, **fit_params)
+
+    return wrapped_fit
+
+
+def _decorate_class_method_if_exist(cls, method_name, decorator):
+    m = inspect.getmembers(cls, lambda x: (inspect.isfunction(x) or inspect.ismethod(x)) and x.__name__ == method_name)
+    if m:
+        setattr(cls, m[0][0], decorator(m[0][1]))
+
+
+def signal_generator(cls):
+    cls.__qlearn__ = QLEARN_VERSION
+    cls.market_info_ = None
+    cls.exact_time = False
+    _decorate_class_method_if_exist(cls, 'predict', predict_and_postprocess)
+    _decorate_class_method_if_exist(cls, 'predict_proba', predict_and_postprocess)
+    _decorate_class_method_if_exist(cls, 'fit', preprocess_fitargs_and_fit)
+    return cls
+
+
+def collect_qlearn_estimators(p, estimators_list, step=''):
+    if isinstance(p, BaseEstimator) and hasattr(p, '__qlearn__'):
+        estimators_list.append((step, p))
+        return estimators_list
+
+    if isinstance(p, Pipeline):
+        for sn, se in p.steps:
+            collect_qlearn_estimators(se, estimators_list, (step + '__' + sn) if step else sn)
+        return estimators_list
+
+    if isinstance(p, BaseSearchCV):
+        return collect_qlearn_estimators(p.estimator, estimators_list, step)
+
+    if isinstance(p, MarketDataComposer):
+        return collect_qlearn_estimators(p.predictor, estimators_list, step)
+
+    return estimators_list
 
 
 class MarketDataComposer(BaseEstimator):
-    def __init__(self, predictor,
-                 picker: AbstractDataPicker,
-                 transformer=None,
-                 column='close',
-                 timeframe=None,
-                 debug=False,
-                 ):
+    def __init__(self, predictor, picker: AbstractDataPicker, column='close', debug=False):
         self.column = column
         self.predictor = predictor
-        self.transformer = transformer
-        self.timeframe = timeframe
         self.picker = picker
         self.debug = debug
         self.fitted_predictors_ = {}
-        self.symbols_ = []
         self.best_params_ = None
         self.best_score_ = None
+        self.estimators_ = collect_qlearn_estimators(predictor, list())
+
+    def __prepare_market_info_data(self, symbol, kwargs) -> dict:
+        self.market_info_ = MarketInfo(symbol, self.column)
+        new_kwargs = dict(**kwargs)
+        for name, _ in self.estimators_:
+            mi_name = f'{name}__market_info_' if name else 'market_info_'
+            new_kwargs[mi_name] = MarketInfo(symbol, self.column)
+        return new_kwargs
 
     def take(self, data, nth: Union[str, int] = 0):
         """
@@ -56,19 +130,17 @@ class MarketDataComposer(BaseEstimator):
         self.best_params_ = {}
         self.best_score_ = {}
 
-        # we setup timeframe
-        self.picker.timeframe = self.timeframe
         for symbol, xp in self.picker.iterate(X):
-            yp = y
+            # propagate market info meta data to be passed to fit method of all qlearn estimators
+            n_fit_params = self.__prepare_market_info_data(symbol, fit_params)
 
-            if self.transformer is not None:
-                yp = self.transformer.transform(xp, y, **fit_params)
-                if self.debug:
-                    debug_output(yp, 'Transformed data')
+            # in case we still have nothing we need to feed it by some values
+            # to avoid fit validation failure
+            if y is None:
+                y = np.zeros_like(xp)
 
-            # set meta data
-            self.symbols_ = symbol
-            _f_p = self.predictor.fit(xp, yp, **fit_params)
+            # process fitting on prepared data
+            _f_p = self.predictor.fit(xp, y, **n_fit_params)
 
             # store best parameters for each symbol
             if hasattr(_f_p, 'best_params_') and hasattr(_f_p, 'best_score_'):
@@ -86,106 +158,21 @@ class MarketDataComposer(BaseEstimator):
 
     def predict(self, X):
         r = dict()
+
         for symbol, xp in self.picker.iterate(X):
             # set meta data
-            self.symbols_ = symbol
             p_key = str(symbol)
 
             if p_key not in self.fitted_predictors_:
                 raise ValueError(f"It seems that predictor was not trained for '{p_key}' !")
 
-            yh = self.fitted_predictors_[p_key].predict(xp)
+            # run predictor
+            predictor = self.fitted_predictors_[p_key]
+            yh = predictor.predict(xp)
+
             if isinstance(symbol, str):
                 r[symbol] = yh
             else:
                 r = yh
 
         return make_dataframe_from_dict(r, 'frame')
-
-
-@dataclass
-class MetaInfo:
-    symbols: Union[List[str], None]
-    column: str
-    timeframe: Union[str, None]
-    tick_sizes: dict = None  # TODO: or move to some global context ???
-    tick_prices: dict = None  # TODO: tick price for futures
-
-
-class BasicMarketEstimator(BaseEstimator):
-
-    @staticmethod
-    def metadata():
-        c_frame = inspect.currentframe().f_back
-        while c_frame:
-            for c, t in c_frame.f_locals.items():
-                if isinstance(t, MarketDataComposer) or (
-                        hasattr(t, 'symbols_') and hasattr(t, 'column') and hasattr(t, 'timeframe')):
-                    return MetaInfo(symbols=t.symbols_,
-                                    column=t.column,
-                                    timeframe=t.timeframe,
-                                    # ------------------------------
-                                    tick_sizes={},
-                                    tick_prices={},
-                                    # ------------------------------
-                                    )
-            c_frame = c_frame.f_back
-        return MetaInfo(symbols=None, column='close', timeframe=None)
-
-    def mix_with(obj, clss):
-        """
-        Dynamically mix class of object with another class.
-
-        :param clss:
-        :return:
-        """
-        if clss not in obj.__class__.__bases__:
-            obj.__class__.__bases__ = obj.__class__.__bases__ + (clss,)
-
-        return obj
-
-    def as_classifier(self):
-        return BasicMarketEstimator.mix_with(self, ClassifierMixin)
-
-    def as_regressor(self):
-        return BasicMarketEstimator.mix_with(self, RegressorMixin)
-
-    def as_cluster(self):
-        return BasicMarketEstimator.mix_with(self, ClusterMixin)
-
-    def as_density(self):
-        return BasicMarketEstimator.mix_with(self, DensityMixin)
-
-    def forward(self):
-        return PredictionPostprocessor(self, None, True)
-
-    def fillna(self, na):
-        return PredictionPostprocessor(self, na, False)
-
-
-class PredictionPostprocessor(BasicMarketEstimator):
-    def __init__(self, other_, fill_by_=0, forward_=False):
-        self.other_ = other_
-        self.fill_by_ = fill_by_
-        self.forward_ = forward_
-        self.need_reindex_ = (fill_by_ is not None) or forward_
-
-    def fit(self, X, y, **fit_params):
-        self.other_.fit(X, y, **fit_params)
-        return self
-
-    def predict(self, X):
-        yh = self.other_.predict(X)
-        if self.need_reindex_:
-            yh = yh.reindex(X.index)
-        if self.forward_:
-            yh = yh.ffill()
-        if self.fill_by_ is not None:
-            yh = yh.fillna(self.fill_by_)
-        return yh
-
-    def forward(self):
-        return PredictionPostprocessor(self.other_, self.fill_by_, True)
-
-    def fillna(self, na):
-        return PredictionPostprocessor(self.other_, na, self.forward_)

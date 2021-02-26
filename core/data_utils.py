@@ -1,20 +1,49 @@
 import pandas as pd
 import numpy as np
+
 import re
 from datetime import timedelta as timedelta_t
 from typing import Union, List, Set, Dict
 from dataclasses import dataclass
 
-from qlearn.core.utils import infer_series_frequency
+from qlearn.core.utils import infer_series_frequency, _check_frame_columns
 
 
 @dataclass
 class DataType:
+    # data type: multi, ticks, ohlc
     type: str
     symbols: List[str]
     freq: str
     subtypes: Set[str]
     
+
+_S1 = pd.Timedelta('1S')
+_D1 = pd.Timedelta('1D')
+
+
+def pre_close_time_delta(freq):
+    """
+    What is minimal time delta time bar's close
+    It returns 1S for all timeframes > 1Min and F/10 otherwise
+
+    TODO: take in account session start/stop times for daily freq
+    """
+    if freq >= _D1:
+        raise ValueError('Data with daily frequency is not supported properly yet !')
+
+    return _S1 if freq > _S1 else freq / 10
+
+
+def pre_close_time_shift(bars):
+    """
+    What is interval to 'last' time before bar's close
+
+    TODO: take in account session start/stop times for daily freq
+    """
+    _tshift = pd.Timedelta(infer_series_frequency(bars[:100]))
+    return _tshift - pre_close_time_delta(_tshift)
+
 
 def time_delta_to_str(d: Union[int, timedelta_t, pd.Timedelta]):
     """
@@ -173,3 +202,41 @@ def detect_data_type(data) -> DataType:
     return DataType(type=dtype, symbols=symbols, freq=freq, subtypes=subtypes)
 
 
+def ohlc_to_flat_price_series(ohlc: pd.DataFrame, freq: pd.Timedelta, sess_start, sess_end):
+    """
+    Make flat series from OHLC data.
+
+    time     open close
+    15:30:00 100  105
+    15:35:00 106  107
+
+    Flat series:
+    15:30:00 100
+    15:34:59 105
+    15:35:00 106
+    15:49:59 107
+    """
+    _check_frame_columns(ohlc, 'open', 'close')
+    return pd.concat((ohlc.open, ohlc.close.shift(1, freq=freq - pre_close_time_delta(freq)))).sort_index()
+
+
+def forward_timeseries(x: pd.Series, period):
+    """
+    Forward shifted timeseries for specified time period
+    """
+    if not isinstance(x, pd.Series):
+        raise ValueError('forward_timeseries> Argument must be pd.Series !')
+    f_x = x.asof(x.index + period).reset_index(drop=True)
+    f_x.index = x.index
+    return f_x
+
+
+def backward_timeseries(x: pd.Series, period):
+    """
+    Backward shifted timeseries for specified time period
+    """
+    if not isinstance(x, pd.Series):
+        raise ValueError('backward_timeseries> Argument must be pd.Series !')
+    f_x = x.asof(x.index - period).reset_index(drop=True)
+    f_x.index = x.index
+    return f_x
