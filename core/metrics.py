@@ -126,8 +126,8 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
         rets = self.calculate_returns(estimator, data)
 
         if rets is None:
-            return -np.inf
+            return -1e6
 
         # measure is proratio to Sharpe
         std = np.nanstd(rets)
-        return (np.nanmean(rets) / std) if std != 0 else -np.inf
+        return (np.nanmean(rets) / std) if std != 0 else -1e6
