@@ -127,7 +127,7 @@ class ScoringTests(unittest.TestCase):
             n_jobs=10,
             cv=TimeSeriesSplit(3),
             estimator=bs,
-            scoring=ForwardReturnsSharpeScoring('1Min', commissions=0.17/100),
+            scoring=ForwardReturnsSharpeScoring('1Min', commissions=0.17),
             param_grid={
                 'rollingrange__period': np.arange(10, 30),
                 'rollingrange__forward_shift_periods': np.arange(5, 10),

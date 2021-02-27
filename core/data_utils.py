@@ -16,7 +16,7 @@ class DataType:
     symbols: List[str]
     freq: str
     subtypes: Set[str]
-    
+
 
 _S1 = pd.Timedelta('1S')
 _D1 = pd.Timedelta('1D')
@@ -228,6 +228,8 @@ def forward_timeseries(x: pd.Series, period):
         raise ValueError('forward_timeseries> Argument must be pd.Series !')
     f_x = x.asof(x.index + period).reset_index(drop=True)
     f_x.index = x.index
+    # drop last points
+    f_x[f_x.index[-1] - period:] = np.nan
     return f_x
 
 
@@ -239,4 +241,6 @@ def backward_timeseries(x: pd.Series, period):
         raise ValueError('backward_timeseries> Argument must be pd.Series !')
     f_x = x.asof(x.index - period).reset_index(drop=True)
     f_x.index = x.index
+    # drop first points
+    f_x[:f_x.index[0] + period] = np.nan
     return f_x

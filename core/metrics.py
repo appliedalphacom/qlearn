@@ -93,22 +93,18 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
         self.commissions = comm / 100
         self.crypto_futures = crypto_futures
 
-        # just for convenience
-        self.best_returns_ = None
-        self.best_score_ = -np.inf
-
-    def __call__(self, estimator, data, _):
+    def calculate_returns(self, estimator, data):
         pred = estimator.predict(data)
 
         # we skip empty signals set
         if len(pred) == 0:
-            return 0
+            return None
 
         # get prices / forward prices
         prices, f_prices = self.get_forward_data(estimator, data)
 
         if self.crypto_futures:
-            # profit on crypto is calculated as following
+            # pnl on crypto is calculated as following
             dp = 1 / prices - 1 / f_prices
 
             # commissions are dependent on prices
@@ -119,16 +115,19 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
             # commissions are fixed
             dpc = scols(dp, pd.Series(self.commissions, dp.index), names=['D', 'C'])
 
+        # drop duplicated indexes if exist (may happened on tick data)
         dpc = dpc[~dpc.index.duplicated(keep='first')]
         rpc = dpc.reindex(pred.index).dropna()
 
         yc = scols(rpc, pred.rename('pred')).dropna()
-        rets = (yc.D * yc.pred - yc.C)
+        return yc.D * yc.pred - yc.C
 
-        # measure proportional to Sharpe
-        score = np.nanmean(rets) / np.nanstd(rets)
-        if score > self.best_score_:
-            self.best_score_ = score
-            self.best_returns_ = rets
+    def __call__(self, estimator, data, _):
+        rets = self.calculate_returns(estimator, data)
 
-        return score
+        if rets is None:
+            return -np.inf
+
+        # measure is proratio to Sharpe
+        std = np.nanstd(rets)
+        return (np.nanmean(rets) / std) if std != 0 else -np.inf
