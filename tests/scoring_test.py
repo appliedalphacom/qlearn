@@ -9,7 +9,7 @@ from sklearn.pipeline import make_pipeline
 from ira.analysis.tools import srows, ohlc_resample
 from qlearn.core.base import MarketDataComposer, signal_generator
 from qlearn.core.generators import RangeBreakoutDetector
-from qlearn.core.metrics import ForwardDirectionScoring
+from qlearn.core.metrics import ForwardDirectionScoring, ForwardReturnsSharpeScoring
 from qlearn.core.pickers import SingleInstrumentPicker
 from qlearn.core.transformers import RollingRange
 from qlearn.core.utils import debug_output
@@ -102,6 +102,32 @@ class ScoringTests(unittest.TestCase):
             cv=TimeSeriesSplit(3),
             estimator=bs,
             scoring=ForwardDirectionScoring('1Min'),
+            param_grid={
+                'rollingrange__period': np.arange(10, 30),
+                'rollingrange__forward_shift_periods': np.arange(5, 10),
+                'rollingrange__timeframe': ['10S', '15S'],
+            }, verbose=True
+        )
+
+        mds = MarketDataComposer(g1, SingleInstrumentPicker(), column='close', debug=True)
+        mds.fit(data, None)
+        print(g1.best_params_)
+        print(g1.best_score_)
+
+    def test_sharpe_scorer_ticks(self):
+        data = pd.read_csv('data/XBTUSD.csv.gz', parse_dates=True, index_col=['time'])
+
+        bs = make_pipeline(RollingRange('10S', 30, 6), RangeBreakoutDetector(0.5))
+
+        m2 = MarketDataComposer(bs, SingleInstrumentPicker(), None, debug=True)
+        y0 = m2.fit(data, None).predict(data)
+        debug_output(y0, 'TestPrediction')
+
+        g1 = GridSearchCV(
+            n_jobs=10,
+            cv=TimeSeriesSplit(3),
+            estimator=bs,
+            scoring=ForwardReturnsSharpeScoring('1Min', commissions=0.17/100),
             param_grid={
                 'rollingrange__period': np.arange(10, 30),
                 'rollingrange__forward_shift_periods': np.arange(5, 10),

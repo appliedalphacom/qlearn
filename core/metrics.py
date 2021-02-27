@@ -55,7 +55,7 @@ class ForwardDirectionScoring(ForwardDataProvider):
             return 0
 
         # get prices / forward prices
-        prices, f_prices = self.get_forward_data(data, estimator)
+        prices, f_prices = self.get_forward_data(estimator, data)
 
         # forward changes
         dp = f_prices - prices
@@ -93,6 +93,10 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
         self.commissions = comm / 100
         self.crypto_futures = crypto_futures
 
+        # just for convenience
+        self.best_returns_ = None
+        self.best_score_ = -np.inf
+
     def __call__(self, estimator, data, _):
         pred = estimator.predict(data)
 
@@ -101,7 +105,7 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
             return 0
 
         # get prices / forward prices
-        prices, f_prices = self.get_forward_data(data, estimator)
+        prices, f_prices = self.get_forward_data(estimator, data)
 
         if self.crypto_futures:
             # profit on crypto is calculated as following
@@ -122,4 +126,9 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
         rets = (yc.D * yc.pred - yc.C)
 
         # measure proportional to Sharpe
-        return np.nanmean(rets) / np.nanstd(rets)
+        score = np.nanmean(rets) / np.nanstd(rets)
+        if score > self.best_score_:
+            self.best_score_ = score
+            self.best_returns_ = rets
+
+        return score
