@@ -8,6 +8,7 @@ from sklearn.pipeline import Pipeline
 from ira.analysis.tools import scols
 from qlearn.core.base import MarketInfo
 from qlearn.core.data_utils import detect_data_type, ohlc_to_flat_price_series, forward_timeseries
+from qlearn.core.utils import debug_output
 
 
 def _extract_market_info(estimator):
@@ -79,7 +80,7 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
     COMMS = {'bitmex': (0.075, True), 'okex': (0.05, True),
              'binance': (0.04, True), 'dukas': (35 * 100 / 1e6, False)}
 
-    def __init__(self, period: Union[str, pd.Timedelta], commissions=0, crypto_futures=False):
+    def __init__(self, period: Union[str, pd.Timedelta], commissions=0, crypto_futures=False, debug=False):
         super().__init__(period)
 
         # possible to pass name of exchange
@@ -92,6 +93,7 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
             # commissions are required in percentages
         self.commissions = comm / 100
         self.crypto_futures = crypto_futures
+        self.debug = debug
 
     def calculate_returns(self, estimator, data):
         pred = estimator.predict(data)
@@ -124,10 +126,15 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
 
     def __call__(self, estimator, data, _):
         rets = self.calculate_returns(estimator, data)
+        sharpe_metric = -1e6
+        if rets is not None:
+            # measure is proratio to Sharpe
+            std = np.nanstd(rets)
+            sharpe_metric = (np.nanmean(rets) / std) if std != 0 else -1e6
 
-        if rets is None:
-            return -1e6
+            if self.debug:
+                debug_output(data, 'Metric data', time_info=True)
+                print(f'\t->> Estimator: {estimator}')
+                print(f'\t->> Metric: {sharpe_metric:.4f}')
 
-        # measure is proratio to Sharpe
-        std = np.nanstd(rets)
-        return (np.nanmean(rets) / std) if std != 0 else -1e6
+        return sharpe_metric

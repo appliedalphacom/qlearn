@@ -1,9 +1,10 @@
-import pandas as pd
-import numpy as np
-from typing import Union, List, Set, Dict
+import types
 from datetime import timedelta
 from itertools import product
-import types
+from typing import Union, List, Dict
+
+import numpy as np
+import pandas as pd
 
 
 def _check_frame_columns(x, *args):
@@ -46,7 +47,7 @@ def _wrap_single_list(param_grid: Union[List, Dict]):
 
 
 def permutate_params(parameters: dict, conditions: Union[types.FunctionType, list, tuple] = None, wrap_as_list=True) -> \
-List[Dict]:
+        List[Dict]:
     """
     Generate list of all permutations for given parameters and it's possible values
 
@@ -104,9 +105,12 @@ List[Dict]:
     return _wrap_single_list(result) if wrap_as_list else result
 
 
-def debug_output(data, name, start=3, end=3):
+def debug_output(data, name, start=3, end=3, time_info=True):
     if isinstance(data, (pd.DataFrame, pd.Series)):
-        hdr = f'.-<{name} {len(data)} records>-' + ' -' * 50
+        t_info = f'{len(data)} records'
+        if time_info:
+            t_info += f' | {data.index[0]}:{data.index[-1]}'
+        hdr = f'.-<{name} {t_info} records>-' + ' -' * 50
         sep = ' -' * 50
         print(hdr[:len(sep)])
         print(data.head(start).to_string(header=True))
