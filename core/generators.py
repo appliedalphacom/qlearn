@@ -69,9 +69,9 @@ class RangeBreakoutDetector(BaseEstimator):
 
         # if we want to filter out some signals
         if self.filter_indicator is not None and self.filter_indicator in X.columns:
-            ms = scols(X[self.filter_indicator], y0, names=['F', 'S']).dropna()
+            ms = pd.merge_asof(y0.rename('S'), X['AdxFilter'].rename('F'), left_index=True, right_index=True)
             y0 = ms[(ms.F > 0) & (ms.S != 0)].S
-
+            
         return y0
 
 
