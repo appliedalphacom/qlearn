@@ -21,9 +21,8 @@ class RangeBreakoutDetector(BaseEstimator):
     Detects breaks of rolling range. +1 for breaking upper range and -1 for bottom one.
     """
 
-    def __init__(self, threshold=0, filter_indicator=None):
+    def __init__(self, threshold=0):
         self.threshold = threshold
-        self.filter_indicator = filter_indicator
 
     def fit(self, X, y, **fit_params):
         return self
@@ -67,11 +66,6 @@ class RangeBreakoutDetector(BaseEstimator):
             _check_frame_columns(X, 'RangeTop', 'RangeBot', 'bid', 'ask')
             y0 = self._ticks_breaks(X)
 
-        # if we want to filter out some signals
-        if self.filter_indicator is not None and self.filter_indicator in X.columns:
-            ms = pd.merge_asof(y0.rename('S'), X['AdxFilter'].rename('F'), left_index=True, right_index=True)
-            y0 = ms[(ms.F > 0) & (ms.S != 0)].S
-            
         return y0
 
 

@@ -63,6 +63,7 @@ class ScoringTests(unittest.TestCase):
         mds.fit(data, None)
         print(g1.best_params_)
         print(g1.best_score_)
+        self.assertAlmostEqual(0.48656, g1.best_score_, delta=1e-5)
 
     def test_scorer_open_close(self):
         data = ohlc_resample(pd.read_csv('data/ES.csv.gz', parse_dates=True, index_col=['time']), '5Min')
@@ -87,6 +88,7 @@ class ScoringTests(unittest.TestCase):
         mds.fit(data, None)
         print(g1.best_params_)
         print(g1.best_score_)
+        self.assertAlmostEqual(0.45124, g1.best_score_, delta=1e-5)
 
     def test_scorer_ticks(self):
         data = pd.read_csv('data/XBTUSD.csv.gz', parse_dates=True, index_col=['time'])
@@ -113,6 +115,7 @@ class ScoringTests(unittest.TestCase):
         mds.fit(data, None)
         print(g1.best_params_)
         print(g1.best_score_)
+        self.assertAlmostEqual(0.68888, g1.best_score_, delta=1e-5)
 
     def test_sharpe_scorer_ticks(self):
         data = pd.read_csv('data/XBTUSD.csv.gz', parse_dates=True, index_col=['time'])
@@ -139,3 +142,4 @@ class ScoringTests(unittest.TestCase):
         mds.fit(data, None)
         print(g1.best_params_)
         print(g1.best_score_)
+        self.assertAlmostEqual(1.07625, g1.best_score_, delta=1e-5)

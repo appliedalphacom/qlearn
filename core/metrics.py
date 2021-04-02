@@ -6,14 +6,18 @@ from sklearn.metrics import accuracy_score
 from sklearn.pipeline import Pipeline
 
 from ira.analysis.tools import scols
-from qlearn.core.base import MarketInfo
+from qlearn.core.base import MarketInfo, _FIELD_MARKET_INFO
 from qlearn.core.data_utils import detect_data_type, ohlc_to_flat_price_series, forward_timeseries
 from qlearn.core.utils import debug_output
 
 
-def _extract_market_info(estimator):
-    q_obj = estimator.steps[-1][1] if isinstance(estimator, Pipeline) else estimator
-    return getattr(q_obj, 'market_info_', None)
+def _find_estimator(x):
+    """
+    Tries to find estimator in nested pipelines
+    """
+    if isinstance(x, Pipeline):
+        return _find_estimator(x.steps[-1][1])
+    return x
 
 
 class ForwardDataProvider:
@@ -24,7 +28,9 @@ class ForwardDataProvider:
     def get_forward_data(self, estimator, data):
         dt = detect_data_type(data)
         if dt.type == 'ohlc':
-            mi: MarketInfo = _extract_market_info(estimator)
+            mi: MarketInfo = getattr(_find_estimator(estimator), _FIELD_MARKET_INFO, None)
+            if mi is None:
+                raise Exception(f"Can't exctract market info data from {estimator}")
             freq = pd.Timedelta(dt.freq)
             prices = ohlc_to_flat_price_series(data, freq, mi.session_start, mi.session_end)
             f_prices = forward_timeseries(prices, self.period)
@@ -63,6 +69,8 @@ class ForwardDirectionScoring(ForwardDataProvider):
         if self.min_threshold > 0:
             dp = dp.where(abs(dp) >= self.min_threshold, 0)
 
+        # drop nan's
+        dp[np.isnan(dp)] = 0
         returns = np.sign(dp)
         # ni = [returns.index.get_loc(i, method='ffill') for i in pred.index]
         # rp = returns.iloc[ni]

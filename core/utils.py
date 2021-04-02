@@ -1,4 +1,6 @@
+import inspect
 import types
+import warnings
 from datetime import timedelta
 from itertools import product
 from typing import Union, List, Dict
@@ -119,3 +121,48 @@ def debug_output(data, name, start=3, end=3, time_info=True):
         print(sep)
     else:
         print(data)
+
+
+def get_object_params(obj, deep=True) -> dict:
+    """
+    Get parameter names for the object
+    """
+    cls = obj.__class__
+    init = getattr(cls.__init__, 'deprecated_original', cls.__init__)
+    if init is object.__init__:
+        # No explicit constructor to introspect
+        return {}
+
+    init_signature = inspect.signature(init)
+    # Consider the constructor parameters excluding 'self'
+    parameters = [p for p in init_signature.parameters.values()
+                  if p.name != 'self' and p.kind != p.VAR_KEYWORD]
+    for p in parameters:
+        if p.kind == p.VAR_POSITIONAL:
+            raise RuntimeError("class should always "
+                               "specify their parameters in the signature"
+                               " of their __init__ (no varargs)."
+                               " %s with constructor %s doesn't "
+                               " follow this convention."
+                               % (cls, init_signature))
+
+    names = sorted([p.name for p in parameters])
+
+    # Extract and sort argument names excluding 'self'
+    out = dict()
+    for key in names:
+        try:
+            value = getattr(obj, key)
+        except AttributeError:
+            warnings.warn('get_class_params() will raise an '
+                          'AttributeError if a parameter cannot be '
+                          'retrieved as an instance attribute. Previously '
+                          'it would return None.',
+                          FutureWarning)
+            value = None
+        if deep and hasattr(value, 'get_params'):
+            deep_items = value.get_params().items()
+            out.update((key + '__' + k, val) for k, val in deep_items)
+        out[key] = value
+
+    return out
