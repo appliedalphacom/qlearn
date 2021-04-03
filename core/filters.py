@@ -16,10 +16,7 @@ class AdxFilter(BaseEstimator, Filter):
         self.smoother = smoother
 
     def get_filter(self, x):
-        _check_frame_columns(x, 'open', 'high', 'low', 'close')
-
-        a = adx(ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe),
-                self.period, smoother=self.smoother, as_frame=True).shift(1)
+        a = adx(ohlc_resample(x, self.timeframe), self.period, smoother=self.smoother, as_frame=True).shift(1)
         return np.sign(a.ADX.where(a.ADX > self.threshold, 0))
 
 
@@ -31,7 +28,7 @@ class AcorrFilter(BaseEstimator, Filter):
       +1: momentum regime (positive correlation > t_mo)
     """
 
-    def __init__(self, lag, period, mr, mo, timeframe=None):
+    def __init__(self, lag, period, mr, mo, timeframe):
         self.lag = lag
         self.period = period
         self.mr = mr
@@ -50,18 +47,12 @@ class AcorrFilter(BaseEstimator, Filter):
         return x.rolling(period).corr(x.shift(lag))
 
     def get_filter(self, x):
-        _check_frame_columns(x, 'open', 'high', 'low', 'close')
-
-        xr = x
-        if self.timeframe:
-            xr = ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe)
-
+        xr = ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe)
         returns = xr.close.pct_change()
         ind = self.rolling_autocorrelation(returns, self.lag, self.period).shift(1)
         r = pd.Series(0, index=ind.index)
         r[ind <= self.mr] = -1
         r[ind >= self.mo] = +1
-
         return r
 
 
@@ -82,12 +73,7 @@ class VolatilityFilter(BaseEstimator, Filter):
         return self
 
     def get_filter(self, x):
-        _check_frame_columns(x, 'open', 'high', 'low', 'close')
-
-        xr = x
-        if self.timeframe:
-            xr = ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe)
-
+        xr = ohlc_resample(x, self.timeframe)
         inst_vol = atr(xr, self.instant_period).shift(1)
         typical_vol = atr(xr, self.typical_period).shift(1)
         r = pd.Series(0, index=xr.index)
@@ -107,11 +93,7 @@ class AtrFilter(BaseEstimator, Filter):
         return self
 
     def get_filter(self, x):
-        _check_frame_columns(x, 'open', 'high', 'low', 'close')
-
-        a = atr(ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe, resample_tz=self.tz),
-                self.period).shift(1)
-
+        a = atr(ohlc_resample(x, self.timeframe, resample_tz=self.tz), self.period).shift(1)
         r = pd.Series(0, index=x.index)
         r[a > self.threshold] = +1
         
