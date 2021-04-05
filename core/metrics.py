@@ -25,7 +25,7 @@ class ForwardDataProvider:
     def __init__(self, period: Union[str, pd.Timedelta]):
         self.period = pd.Timedelta(period) if isinstance(period, str) else period
 
-    def get_forward_data(self, estimator, data):
+    def preprocess_price_data(self, estimator, data):
         dt = detect_data_type(data)
         if dt.type == 'ohlc':
             mi: MarketInfo = getattr(_find_estimator(estimator), _FIELD_MARKET_INFO, None)
@@ -33,15 +33,18 @@ class ForwardDataProvider:
                 raise Exception(f"Can't exctract market info data from {estimator}")
             freq = pd.Timedelta(dt.freq)
             prices = ohlc_to_flat_price_series(data, freq, mi.session_start, mi.session_end)
-            f_prices = forward_timeseries(prices, self.period)
 
         elif dt.type == 'ticks':
             # here we will use midprices as some first approximation
             prices = 0.5 * (data.bid + data.ask)
-            f_prices = forward_timeseries(prices, self.period)
 
         else:
             raise ValueError(f"Don't know how to derive forward returns from '{dt.type}' data")
+        return prices
+
+    def get_forward_data(self, estimator, data):
+        prices = self.preprocess_price_data(estimator, data)
+        f_prices = forward_timeseries(prices, self.period)
         return prices, f_prices
 
 
@@ -146,3 +149,46 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
                 print(f'\t->> Metric: {sharpe_metric:.4f}')
 
         return sharpe_metric
+
+
+class ReverseSignalsSharpeScoring(ForwardReturnsSharpeScoring):
+    """
+    Scoring for reversive signals
+    """
+
+    def __init__(self, commissions=0, crypto_futures=False, debug=False):
+        super().__init__(None, commissions, crypto_futures, debug)
+
+    def calculate_returns(self, estimator, data):
+        pred = estimator.predict(data)
+
+        # we skip empty signals set
+        if len(pred) == 0:
+            return None
+
+        # we need only points where position is reversed
+        revere_pts = pred[pred.diff() != 0].dropna()
+
+        # price series
+        price = self.preprocess_price_data(estimator, data)
+        prices = price.loc[revere_pts.index]
+        f_prices = prices.shift(-1)
+
+        if self.crypto_futures:
+            # pnl on crypto is calculated as following
+            dp = 1 / prices - 1 / f_prices
+
+            # commissions are dependent on prices
+            dpc = scols(dp, self.commissions * 1 / f_prices, names=['D', 'C'])
+        else:
+            dp = f_prices - prices
+
+            # commissions are fixed
+            dpc = scols(dp, pd.Series(self.commissions, dp.index), names=['D', 'C'])
+
+        # drop duplicated indexes if exist (may happened on tick data)
+        dpc = dpc[~dpc.index.duplicated(keep='first')]
+        rpc = dpc.reindex(revere_pts.index).dropna()
+
+        yc = scols(rpc, revere_pts.rename('pred')).dropna()
+        return yc.D * yc.pred - yc.C
