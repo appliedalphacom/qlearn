@@ -7,6 +7,8 @@ from typing import Union, List, Dict
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import Pipeline
 
 
 def _check_frame_columns(x, *args):
@@ -166,3 +168,21 @@ def get_object_params(obj, deep=True) -> dict:
         out[key] = value
 
     return out
+
+
+def search_params_init(e, to_skip=list(['verbose', 'memory'])):
+    ps0 = e.get_params()
+    res = []
+
+    for k, v in ps0.items():
+        is_obj = isinstance(v, (BaseEstimator, Pipeline, TransformerMixin))
+        is_iter = isinstance(v, (list, tuple))
+        is_x = any([(k.endswith('__' + x) or k == x) for x in to_skip])
+
+        if v is None or is_obj or is_iter or is_x:
+            continue
+        else:
+            res.append(f"\t'{k}': [{repr(v)}]")
+
+    res_s = ',\n'.join(res)
+    print('{\n' + res_s + '\n}')
