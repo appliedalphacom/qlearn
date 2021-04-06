@@ -140,8 +140,11 @@ class ForwardReturnsSharpeScoring(ForwardDataProvider):
         sharpe_metric = -1e6
         if rets is not None:
             # measure is proratio to Sharpe
-            std = np.nanstd(rets)
-            sharpe_metric = (np.nanmean(rets) / std) if std != 0 else -1e6
+            if all(np.isnan(rets)):
+                sharpe_metric = -1e6
+            else:
+                std = np.nanstd(rets)
+                sharpe_metric = (np.nanmean(rets) / std) if std != 0 else -1e6
 
             if self.debug:
                 debug_output(data, 'Metric data', time_info=True)
