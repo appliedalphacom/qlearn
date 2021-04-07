@@ -89,9 +89,11 @@ class SimSetup:
         return f'{self.name} : {self.signal_type} | {repr(self.trackers) if self.trackers is not None else "<no tracker>"}'
 
 
-def _is_signals_generator(obj):
+def _is_signal_or_generator(obj):
     return _type(obj) in [_Types.SIGNAL, _Types.ESTIMATOR]
 
+def _is_generator(obj):
+    return _type(obj) == _Types.ESTIMATOR
 
 def _is_tracker(obj):
     return _type(obj) == _Types.TRACKER
@@ -105,7 +107,7 @@ def _recognize(setup, data, name) -> List[SimSetup]:
             r.extend(_recognize(v, data, name + '/' + n))
 
     elif isinstance(setup, (list, tuple)):
-        if len(setup) == 2 and _is_signals_generator(setup[0]) and _is_tracker(setup[1]):
+        if len(setup) == 2 and _is_signal_or_generator(setup[0]) and _is_tracker(setup[1]):
             r.append(SimSetup(setup[0], setup[1], name))
         else:
             for j, s in enumerate(setup):
@@ -115,6 +117,9 @@ def _recognize(setup, data, name) -> List[SimSetup]:
         r.append(SimSetup(None, setup, name))
 
     elif isinstance(setup, (pd.DataFrame, pd.Series)):
+        r.append(SimSetup(setup, None, name))
+
+    elif _is_generator(setup):
         r.append(SimSetup(setup, None, name))
 
     return r
@@ -129,7 +134,10 @@ def _proc_run(s: SimSetup, data, start, stop, broker, spreads):
     return b
 
 
-def simulation(setup, data, broker='', project='', start=None, stop=None, spreads=0):
+def simulation(setup, data, broker='', project='', start=None, stop=None, spreads=0, multiproc=False):
+    """
+    Simulate different cases
+    """
     sims = _recognize(setup, data, project)
     results = []
 
