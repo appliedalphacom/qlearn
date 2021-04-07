@@ -6,7 +6,7 @@ from qlearn.core.generators import RangeBreakoutDetector, PivotsBreakoutDetector
 from qlearn.core.transformers import RollingRange, FractalsRange, Pivots
 from qlearn.core.filters import AdxFilter, AcorrFilter, VolatilityFilter
 from qlearn.tracking.trackers import (
-    Tracker, DispatchTracker, PipelineTracker, TakeStopTracker,
+    Tracker, FixedTrader, DispatchTracker, PipelineTracker, TakeStopTracker,
     TimeExpirationTracker, TurtleTracker, ProgressionTracker
 )
 

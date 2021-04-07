@@ -85,6 +85,37 @@ class TakeStopTracker(Tracker):
         }
 
 
+class FixedTrader(TakeStopTracker):
+    """
+    Fixed trader tracker:
+     fixed position size, fixed stop and take
+    """
+
+    def __init__(self, size, take, stop, tick_size=1, debug=False):
+        super().__init__(debug)
+        self.position_size = size
+        self.fixed_take = take * tick_size
+        self.fixed_stop = stop * tick_size
+
+    def trade(self, trade_time, quantity, comment=''):
+        if quantity > 0:
+            if self.fixed_stop > 0:
+                self.stop_at(trade_time, self._service.ask - self.fixed_stop)
+
+            if self.fixed_take > 0:
+                self.take_at(trade_time, self._service.ask + self.fixed_take)
+
+        elif quantity < 0:
+            if self.fixed_stop > 0:
+                self.stop_at(trade_time, self._service.bid + self.fixed_stop)
+
+            if self.fixed_take > 0:
+                self.take_at(trade_time, self._service.bid - self.fixed_take)
+
+        # call super method
+        super().trade(trade_time, quantity * self.position_size, comment)
+
+
 class TimeExpirationTracker(Tracker):
     """
     Expiration exits
