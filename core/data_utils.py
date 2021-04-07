@@ -17,6 +17,9 @@ class DataType:
     freq: str
     subtypes: Set[str]
 
+    def frequency(self):
+        return pd.Timedelta(self.freq)
+
 
 _S1 = pd.Timedelta('1S')
 _D1 = pd.Timedelta('1D')

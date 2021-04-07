@@ -1,34 +1,19 @@
 import copy
 import inspect
-from datetime import timedelta
-from typing import Union, List, Dict
+from typing import Union, Dict
 
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection._search import BaseSearchCV
 from sklearn.pipeline import Pipeline
 
 from qlearn.core.data_utils import make_dataframe_from_dict, pre_close_time_shift
+from qlearn.core.metrics import ForwardReturnsCalculator
 from qlearn.core.pickers import AbstractDataPicker
+from qlearn.core.structs import MarketInfo, _FIELD_MARKET_INFO, _FIELD_EXACT_TIME, _FIELD_FILTER_INDICATOR, \
+    QLEARN_VERSION
 from qlearn.core.utils import get_object_params
-
-QLEARN_VERSION = '0.0.5'
-_FIELD_FILTER_INDICATOR = 'filter_indicator'
-_FIELD_EXACT_TIME = 'exact_time'
-_FIELD_MARKET_INFO = 'market_info_'
-
-
-@dataclass
-class MarketInfo:
-    symbols: Union[List[str], None]
-    column: str
-    timezone: str = 'UTC'
-    session_start = timedelta(hours=0, minutes=0)
-    session_end = timedelta(hours=23, minutes=59, seconds=58)
-    tick_sizes: dict = None
-    tick_prices: dict = None
 
 
 def predict_and_postprocess(class_predict_function):
@@ -173,15 +158,19 @@ def signals_filtering_pipeline(fltr: Filter, predictor):
 
 
 class MarketDataComposer(BaseEstimator):
-    def __init__(self, predictor, picker: AbstractDataPicker, column='close', debug=False):
+    """
+    Market data composer for any predictors related to trading signals generation
+    """
+
+    def __init__(self, predictor, selector: AbstractDataPicker, column='close', debug=False):
         self.column = column
         self.predictor = predictor
-        self.picker = picker
-        self.debug = debug
+        self.selector = selector
         self.fitted_predictors_ = {}
         self.best_params_ = None
         self.best_score_ = None
         self.estimators_ = collect_qlearn_estimators(predictor, list())
+        self.debug = debug
 
     def __prepare_market_info_data(self, symbol, kwargs) -> dict:
         self.market_info_ = MarketInfo(symbol, self.column)
@@ -191,6 +180,13 @@ class MarketDataComposer(BaseEstimator):
             new_kwargs[mi_name] = MarketInfo(symbol, self.column)
         return new_kwargs
 
+    def for_interval(self, start, stop):
+        """
+        Setup dates interval for fitting/prediction
+        """
+        self.selector.for_range(start, stop)
+        return self
+
     def take(self, data, nth: Union[str, int] = 0):
         """
         Helper method to take n-th iteration from data picker
@@ -199,7 +195,7 @@ class MarketDataComposer(BaseEstimator):
         :param nth: if int it returns n-th iteration of data
         :return: data or none if not matched
         """
-        return self.picker.take(data, nth)
+        return self.selector.take(data, nth)
 
     def as_datasource(self, data) -> Dict:
         """
@@ -208,7 +204,7 @@ class MarketDataComposer(BaseEstimator):
         :param data: input data
         :return: {symbol : preprocessed_data}
         """
-        return self.picker.as_datasource(data)
+        return self.selector.as_datasource(data)
 
     def fit(self, X, y, **fit_params):
         # reset fitted predictors
@@ -216,7 +212,7 @@ class MarketDataComposer(BaseEstimator):
         self.best_params_ = {}
         self.best_score_ = {}
 
-        for symbol, xp in self.picker.iterate(X):
+        for symbol, xp in self.selector.iterate(X):
             # propagate market info meta data to be passed to fit method of all qlearn estimators
             n_fit_params = self.__prepare_market_info_data(symbol, fit_params)
 
@@ -242,23 +238,44 @@ class MarketDataComposer(BaseEstimator):
 
         return self
 
-    def predict(self, X):
+    def __get_prediction(self, symbol, x):
+        p_key = str(symbol)
+
+        if p_key not in self.fitted_predictors_:
+            raise ValueError(f"Can't find fitted predictor for '{p_key}' !")
+
+        # run predictor
+        predictor = self.fitted_predictors_[p_key]
+        yh = predictor.predict(x)
+        return yh
+
+    def predict(self, x):
+        """
+        Get prediction on all market data from x
+        """
         r = dict()
 
-        for symbol, xp in self.picker.iterate(X):
-            # set meta data
-            p_key = str(symbol)
-
-            if p_key not in self.fitted_predictors_:
-                raise ValueError(f"It seems that predictor was not trained for '{p_key}' !")
-
-            # run predictor
-            predictor = self.fitted_predictors_[p_key]
-            yh = predictor.predict(xp)
-
+        for symbol, xp in self.selector.iterate(x):
+            yh = self.__get_prediction(symbol, xp)
             if isinstance(symbol, str):
                 r[symbol] = yh
             else:
                 r = yh
 
         return make_dataframe_from_dict(r, 'frame')
+
+    def estimated_portfolio(self, x, forwards_calculator: ForwardReturnsCalculator):
+        """
+        Get estimated portfolio based on forwards calculator
+        """
+        rets = {}
+        if forwards_calculator is None or not hasattr(forwards_calculator, 'get_forward_returns'):
+            raise ValueError(
+                "forwards_calculator parameter doesn't have get_forward_returns(price, signals, market_info) method"
+            )
+        for symbol, xp in self.selector.iterate(x):
+            yh = self.__get_prediction(symbol, xp)
+            return_series = forwards_calculator.get_forward_returns(xp, yh, MarketInfo(symbol, self.column))
+            rets[symbol] = forwards_calculator.get_forward_returns(xp, yh, MarketInfo(symbol, self.column))
+
+        return make_dataframe_from_dict(rets, 'frame')
