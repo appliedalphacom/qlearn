@@ -26,9 +26,9 @@ class Test(TestCase):
             'exp1 [simple break]': m1,
             'exp2 [time tracker]': [m2, TimeExpirationTracker('5H')]
         }, {'ES': data}, 'forex', 'Test1')
-        debug_output(r[0].portfolio, 'Portfolio')
+        # debug_output(r.results[0].portfolio, 'Portfolio')
 
-        self.assertAlmostEqual(24.50, r[0].portfolio['ES_PnL'].sum())
-        self.assertAlmostEqual(46.75, r[1].portfolio['ES_PnL'].sum())
+        self.assertAlmostEqual(24.50, r.results[0].portfolio['ES_PnL'].sum())
+        self.assertAlmostEqual(46.75, r.results[1].portfolio['ES_PnL'].sum())
 
         simulations_report(r, 1000, only_report=True)
