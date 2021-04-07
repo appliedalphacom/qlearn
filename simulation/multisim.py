@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import List
 
 import numpy as np
@@ -7,24 +8,30 @@ from sklearn.pipeline import Pipeline
 
 from ira.simulator.SignalTester import Tracker
 from ira.utils.nb_functions import z_backtest
-# Global for storing the data to be served
-# g_data = {}
 from qlearn import MarketDataComposer
 
 
-def _type(obj):
+class _Types(Enum):
+    UKNOWN = 'unknown'
+    LIST = 'list'
+    TRACKER = 'tracker'
+    SIGNAL = 'signal'
+    ESTIMATOR = 'estimator'
+
+
+def _type(obj) -> _Types:
     if obj is None:
-        t = 'unknown'
+        t = _Types.UKNOWN
     elif isinstance(obj, (list, tuple)):
-        t = 'list'
+        t = _Types.LIST
     elif isinstance(obj, Tracker):
-        t = 'tracker'
+        t = _Types.TRACKER
     elif isinstance(obj, (pd.DataFrame, pd.Series)):
-        t = 'signal'
-    elif isinstance(obj, Pipeline, BaseEstimator):
-        t = 'estimator'
+        t = _Types.SIGNAL
+    elif isinstance(obj, (Pipeline, BaseEstimator)):
+        t = _Types.ESTIMATOR
     else:
-        t = 'unknown'
+        t = _Types.UKNOWN
     return t
 
 
@@ -60,19 +67,19 @@ def start_stop_sigs(data, start=None, stop=None):
 class SimSetup:
     def __init__(self, signals, trackers, experiment_name=None):
         self.signals = signals
-        self.signal_type = _type(signals)
+        self.signal_type: _Types = _type(signals)
         self.trackers = trackers
         self.name = experiment_name
 
     def get_signals(self, data, start, stop):
         sx = self.signals
 
-        if sx is None or self.signal_type == 'unknown':
+        if sx is None or self.signal_type == _Types.UKNOWN:
             return start_stop_sigs(data, start, stop)
 
-        if self.signal_type == 'estimator':
+        if self.signal_type == _Types.ESTIMATOR:
             if isinstance(sx, MarketDataComposer):
-                sx.selector.for_range(start, stop)
+                sx = sx.for_interval(start, stop)
             return sx.fit(data, None).predict(data)
 
         _z = slice(start, stop) if start is not None and stop is not None else None
@@ -82,10 +89,12 @@ class SimSetup:
         return f'{self.name} : {self.signal_type} | {repr(self.trackers) if self.trackers is not None else "<no tracker>"}'
 
 
-def _is_signals_generator(obj): return _type(obj) in ['signal', 'estimator']
+def _is_signals_generator(obj):
+    return _type(obj) in [_Types.SIGNAL, _Types.ESTIMATOR]
 
 
-def _is_tracker(obj): return _type(obj) == 'tracker'
+def _is_tracker(obj):
+    return _type(obj) == _Types.TRACKER
 
 
 def _recognize(setup, data, name) -> List[SimSetup]:
@@ -112,6 +121,9 @@ def _recognize(setup, data, name) -> List[SimSetup]:
 
 
 def _proc_run(s: SimSetup, data, start, stop, broker, spreads):
+    """
+    TODO: need to be running in separate process
+    """
     b = z_backtest(s.get_signals(data, start, stop), data, broker, spread=spreads,
                    name=s.name, execution_logger=True, trackers=s.trackers)
     return b
