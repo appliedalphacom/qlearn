@@ -6,9 +6,11 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
 
-from ira.simulator.SignalTester import Tracker
+from ira.simulator.SignalTester import Tracker, SimulationResult
 from ira.utils.nb_functions import z_backtest
 from qlearn import MarketDataComposer
+
+from ira.utils.ui_utils import red, green, yellow, cyan, blue
 
 
 class _Types(Enum):
@@ -92,8 +94,10 @@ class SimSetup:
 def _is_signal_or_generator(obj):
     return _type(obj) in [_Types.SIGNAL, _Types.ESTIMATOR]
 
+
 def _is_generator(obj):
     return _type(obj) == _Types.ESTIMATOR
+
 
 def _is_tracker(obj):
     return _type(obj) == _Types.TRACKER
@@ -147,3 +151,40 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
             b = _proc_run(s, data, start, stop, broker, spreads)
             results.append(b)
     return results
+
+
+def simulations_report(results: List[SimulationResult], init_cash=0, risk_free=0.0,
+                       margin_call_pct=0.33,
+                       only_report=False, only_positive=False):
+    """
+    Plot multisim report
+    """
+    import matplotlib.pyplot as plt
+
+    def _fmt(x, f='.2f'):
+        xs = f'%{f}' % x
+        return green(xs) if x >= 0 else red(xs)
+
+    for _r in results:
+        eqty = init_cash + _r.equity()
+        print(f'{blue(_r.name)} : ', end='')
+
+        # skip negative results
+        if only_positive and eqty[-1] < 0:
+            print(red('[SKIPPED]'))
+            continue
+
+        if init_cash > 0:
+            prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct)
+            print(
+                f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
+                f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
+                f'Gain: ${_fmt(eqty[-1])} '
+            )
+
+        if not only_report:
+            plt.plot(eqty, label=_r.name)
+
+        print(yellow('[OK]'))
+
+    plt.legend()
