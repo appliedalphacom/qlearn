@@ -97,23 +97,23 @@ class FixedTrader(TakeStopTracker):
         self.fixed_take = take * tick_size
         self.fixed_stop = stop * tick_size
 
-    def trade(self, trade_time, quantity, comment=''):
-        if quantity > 0:
+    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+        if signal_qty > 0:
             if self.fixed_stop > 0:
-                self.stop_at(trade_time, self._service.ask - self.fixed_stop)
+                self.stop_at(signal_time, ask - self.fixed_stop)
 
             if self.fixed_take > 0:
-                self.take_at(trade_time, self._service.ask + self.fixed_take)
+                self.take_at(signal_time, ask + self.fixed_take)
 
-        elif quantity < 0:
+        elif signal_qty < 0:
             if self.fixed_stop > 0:
-                self.stop_at(trade_time, self._service.bid + self.fixed_stop)
+                self.stop_at(signal_time, bid + self.fixed_stop)
 
             if self.fixed_take > 0:
-                self.take_at(trade_time, self._service.bid - self.fixed_take)
+                self.take_at(signal_time, bid - self.fixed_take)
 
         # call super method
-        super().trade(trade_time, quantity * self.position_size, comment)
+        return signal_qty * self.position_size
 
 
 class TimeExpirationTracker(Tracker):
