@@ -147,7 +147,7 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
     results = []
 
     for i, s in enumerate(sims):
-        print(s)
+        # print(s)
         if True:
             b = _proc_run(s, data, start, stop, broker, spreads)
             results.append(b)
