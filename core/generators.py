@@ -1,19 +1,21 @@
+from typing import Union
+
 import pandas as pd
 from sklearn.base import BaseEstimator
 
-from ira.analysis.timeseries import smooth
+from ira.analysis.timeseries import smooth, rsi
 from ira.analysis.tools import srows, scols
 from qlearn.core.base import signal_generator
 from qlearn.core.data_utils import pre_close_time_shift
 from qlearn.core.utils import _check_frame_columns
 
 
-def crossup(x, t):
+def crossup(x, t: Union[pd.Series, float]):
     t1 = t.shift(1) if isinstance(t, pd.Series) else t
     return x[(x > t) & (x.shift(1) <= t1)].index
 
 
-def crossdown(x, t):
+def crossdown(x, t: Union[pd.Series, float]):
     t1 = t.shift(1) if isinstance(t, pd.Series) else t
     return x[(x < t) & (x.shift(1) >= t1)].index
 
@@ -114,7 +116,6 @@ class CrossingMovings(BaseEstimator):
         return self
 
     def predict(self, x):
-        # self.exact_time = True
         price_col = self.market_info_.column
         fast_ma = smooth(x[price_col], self.fast_type, self.fast)
         slow_ma = smooth(x[price_col], self.slow_type, self.slow)
@@ -123,3 +124,20 @@ class CrossingMovings(BaseEstimator):
             pd.Series(+1, crossup(fast_ma, slow_ma)),
             pd.Series(-1, crossdown(fast_ma, slow_ma))
         )
+
+
+@signal_generator
+class Rsi(BaseEstimator):
+    def __init__(self, period, lower=25, upper=75, smoother='sma'):
+        self.period = period
+        self.upper = upper
+        self.lower = lower
+        self.smoother = smoother
+
+    def fit(self, x, y, **fit_args):
+        return self
+
+    def predict(self, x):
+        price_col = self.market_info_.column
+        r = rsi(x[price_col], self.period, smoother=self.smoother)
+        return srows(pd.Series(+1, crossup(r, self.lower)), pd.Series(-1, crossdown(r, self.upper)))

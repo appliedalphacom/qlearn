@@ -10,7 +10,7 @@ from sklearn.pipeline import Pipeline
 
 from qlearn.core.data_utils import make_dataframe_from_dict, pre_close_time_shift
 from qlearn.core.metrics import ForwardReturnsCalculator
-from qlearn.core.pickers import AbstractDataPicker
+from qlearn.core.pickers import AbstractDataPicker, SingleInstrumentPicker, PortfolioPicker
 from qlearn.core.structs import MarketInfo, _FIELD_MARKET_INFO, _FIELD_EXACT_TIME, _FIELD_FILTER_INDICATOR, \
     QLEARN_VERSION
 from qlearn.core.utils import get_object_params
@@ -279,3 +279,19 @@ class MarketDataComposer(BaseEstimator):
             rets[symbol] = forwards_calculator.get_forward_returns(xp, yh, MarketInfo(symbol, self.column))
 
         return make_dataframe_from_dict(rets, 'frame')
+
+
+class SingleInstrumentComposer(MarketDataComposer):
+    """
+    Shortcut for MarketDataComposer(x, SingleInstrumentPicker(), ...)
+    """
+    def __init__(self, predictor, column='close', debug=False):
+        super().__init__(predictor, SingleInstrumentPicker(), column, debug)
+
+
+class PortfolioComposer(MarketDataComposer):
+    """
+    Shortcut for MarketDataComposer(x, PortfolioPicker(), ...)
+    """
+    def __init__(self, predictor, column='close', debug=False):
+        super().__init__(predictor, PortfolioPicker(), column, debug)
