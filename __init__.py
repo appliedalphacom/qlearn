@@ -1,4 +1,4 @@
-from qlearn.core.base import Filter, MarketDataComposer, signal_generator
+from qlearn.core.base import Filter, MarketDataComposer, SingleInstrumentComposer, PortfolioComposer, signal_generator
 from qlearn.core.pickers import SingleInstrumentPicker, PortfolioPicker
 from qlearn.core.metrics import ForwardDirectionScoring, ForwardReturnsSharpeScoring, ReverseSignalsSharpeScoring
 
