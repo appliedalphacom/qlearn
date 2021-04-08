@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.base import BaseEstimator
 
+from ira.analysis.timeseries import smooth
 from ira.analysis.tools import srows, scols
 from qlearn.core.base import signal_generator
 from qlearn.core.data_utils import pre_close_time_shift
@@ -8,11 +9,13 @@ from qlearn.core.utils import _check_frame_columns
 
 
 def crossup(x, t):
-    return x[(x > t) & (x.shift(1) <= t)].index
+    t1 = t.shift(1) if isinstance(t, pd.Series) else t
+    return x[(x > t) & (x.shift(1) <= t1)].index
 
 
 def crossdown(x, t):
-    return x[(x < t) & (x.shift(1) >= t)].index
+    t1 = t.shift(1) if isinstance(t, pd.Series) else t
+    return x[(x < t) & (x.shift(1) >= t1)].index
 
 
 @signal_generator
@@ -97,3 +100,26 @@ class PivotsBreakoutDetector(BaseEstimator):
               self.sup_levels if bl in cols],
             keep='last')
         return breaks
+
+
+@signal_generator
+class CrossingMovings(BaseEstimator):
+    def __init__(self, fast, slow, fast_type='sma', slow_type='sma'):
+        self.fast = fast
+        self.slow = slow
+        self.fast_type = fast_type
+        self.slow_type = slow_type
+
+    def fit(self, x, y, **fit_args):
+        return self
+
+    def predict(self, x):
+        # self.exact_time = True
+        price_col = self.market_info_.column
+        fast_ma = smooth(x[price_col], self.fast_type, self.fast)
+        slow_ma = smooth(x[price_col], self.slow_type, self.slow)
+
+        return srows(
+            pd.Series(+1, crossup(fast_ma, slow_ma)),
+            pd.Series(-1, crossdown(fast_ma, slow_ma))
+        )
