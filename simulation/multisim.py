@@ -83,7 +83,7 @@ class SimSetup:
         if self.signal_type == _Types.ESTIMATOR:
             if isinstance(sx, MarketDataComposer):
                 sx = sx.for_interval(start, stop)
-            return sx.fit(data, None).predict(data)
+            return sx.predict(data)
 
         _z = slice(start, stop) if start is not None and stop is not None else None
         return sx[_z] if _z is not None else sx
@@ -135,7 +135,7 @@ def _proc_run(s: SimSetup, data, start, stop, broker, spreads):
     TODO: need to be running in separate process
     """
     b = z_backtest(s.get_signals(data, start, stop), data, broker, spread=spreads,
-                   name=s.name, execution_logger=True, trackers=s.trackers)
+                   name=s.name, execution_logger=True, trackers=s.trackers, )
     return b
 
 

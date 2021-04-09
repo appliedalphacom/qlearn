@@ -17,3 +17,4 @@ class MarketInfo:
     session_end = timedelta(hours=23, minutes=59, seconds=58)
     tick_sizes: dict = None
     tick_prices: dict = None
+    debug: bool = False

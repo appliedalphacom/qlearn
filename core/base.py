@@ -8,6 +8,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection._search import BaseSearchCV
 from sklearn.pipeline import Pipeline
 
+from ira.utils.ui_utils import green
 from qlearn.core.data_utils import make_dataframe_from_dict, pre_close_time_shift
 from qlearn.core.metrics import ForwardReturnsCalculator
 from qlearn.core.pickers import AbstractDataPicker, SingleInstrumentPicker, PortfolioPicker
@@ -87,76 +88,6 @@ def collect_qlearn_estimators(p, estimators_list, step=''):
     return estimators_list
 
 
-class Filter(TransformerMixin):
-    """
-    Basic class for any signal filtering class
-    """
-    filter_indicator = None
-
-    def get_filter(self, x: Union[pd.Series, pd.DataFrame]):
-        """
-        Filtering logic implementation. Method should return pandas Series or numpy array.
-        """
-        # default filter
-        return pd.Series(1, x.index)
-
-    def _filter_name(self):
-        name = None
-        if hasattr(self, _FIELD_FILTER_INDICATOR):
-            name = getattr(self, _FIELD_FILTER_INDICATOR)
-        if name is None:
-            name = self.__class__.__name__
-        return name
-
-    def fit(self, x, y, **kwargs):
-        return self
-
-    def transform(self, x):
-        f = self.get_filter(x)
-
-        if not isinstance(f, pd.Series):
-            if not isinstance(f, np.ndarray):
-                raise ValueError(f'{self.__class__.__name__} get_filter must return Series or numpy array')
-            else:
-                ff = f.flatten()
-                if len(ff) != len(x):
-                    raise ValueError(
-                        f'{self.__class__.__name__} get_filter returned wrong size ({len(ff)} but expected {len(x)})')
-                f = pd.Series(ff, index=x.index)
-
-        return pd.concat((x, f.rename(self._filter_name())), axis=1).ffill()
-
-    def apply_to(self, preidictor):
-        """
-        Apply this filter to predictor
-        """
-        return signals_filtering_pipeline(self, preidictor)
-
-
-def signals_filtering_pipeline(fltr: Filter, predictor):
-    """
-    Make pipeline from filter and predictor
-    """
-    if not isinstance(fltr, Filter):
-        raise ValueError('First argument must be instance of Filter class')
-
-    if not isinstance(predictor, BaseEstimator):
-        raise ValueError('Second argument must be instance of BaseEstimator class')
-
-    p_cls, f_cls = predictor.__class__, fltr.__class__
-    filter_name = f_cls.__name__
-    p_meths = {**p_cls.__dict__, **{_FIELD_FILTER_INDICATOR: filter_name}}
-    f_meths = {**f_cls.__dict__, **{_FIELD_FILTER_INDICATOR: filter_name}}
-    new_p_cls = type(p_cls.__name__, tuple(p_cls.mro()[1:]), p_meths)
-    new_f_cls = type(f_cls.__name__, tuple(f_cls.mro()[1:]), f_meths)
-    f_params = get_object_params(fltr)
-
-    new_p_inst = new_p_cls(**predictor.get_params())
-    new_f_inst = new_f_cls(**f_params)
-
-    return Pipeline([(f_cls.__name__, new_f_inst), (p_cls.__name__, new_p_inst)])
-
-
 class MarketDataComposer(BaseEstimator):
     """
     Market data composer for any predictors related to trading signals generation
@@ -173,7 +104,7 @@ class MarketDataComposer(BaseEstimator):
         self.debug = debug
 
     def __prepare_market_info_data(self, symbol, kwargs) -> dict:
-        self.market_info_ = MarketInfo(symbol, self.column)
+        self.market_info_ = MarketInfo(symbol, self.column, debug=self.debug)
         new_kwargs = dict(**kwargs)
         for name, _ in self.estimators_:
             mi_name = f'{name}__{_FIELD_MARKET_INFO}' if name else _FIELD_MARKET_INFO
@@ -184,6 +115,8 @@ class MarketDataComposer(BaseEstimator):
         """
         Setup dates interval for fitting/prediction
         """
+        if self.debug:
+            print(' > Selected [' + green(f'{start}:{stop}') + ']')
         self.selector.for_range(start, stop)
         return self
 

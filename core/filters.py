@@ -1,39 +1,41 @@
-import numpy as np
-import pandas as pd
 from sklearn.base import BaseEstimator
 
 from ira.analysis.timeseries import adx, atr
 from ira.analysis.tools import ohlc_resample
-from qlearn.core.base import Filter
-from qlearn.core.utils import _check_frame_columns
 
 
-class AdxFilter(BaseEstimator, Filter):
-    def __init__(self, timeframe, period, threshold, smoother='kama'):
+class AdxFilter(BaseEstimator):
+    """
+    ADX based trend filter. When adx > threshold
+    """
+
+    def __init__(self, timeframe, period, threshold, smoother='ema'):
         self.timeframe = timeframe
         self.period = period
         self.threshold = threshold
         self.smoother = smoother
 
-    def get_filter(self, x):
+    def fit(self, x, y, **kwargs):
+        return self
+
+    def predict(self, x):
         a = adx(ohlc_resample(x, self.timeframe), self.period, smoother=self.smoother, as_frame=True).shift(1)
-        return np.sign(a.ADX.where(a.ADX > self.threshold, 0))
+        return a.ADX > self.threshold
 
 
-class AcorrFilter(BaseEstimator, Filter):
+class AcorrFilter(BaseEstimator):
     """
-    Regime based returns series autocorrelation
-      -1: mean reversion regime (negative correlation < t_mr)
-       0: uncertain (t_mr < corr < r_mo)
-      +1: momentum regime (positive correlation > t_mo)
+    Autocorrelation filter on returns series
+     If above is True (default) returns True for acorr > threshold
+     If above is False returns True for acorr < threshold
     """
 
-    def __init__(self, lag, period, mr, mo, timeframe):
+    def __init__(self, timeframe, lag, period, threshold, above=True):
         self.lag = lag
         self.period = period
-        self.mr = mr
-        self.mo = mo
+        self.threshold = threshold
         self.timeframe = timeframe
+        self.above = above
 
     def fit(self, x, y, **kwargs):
         return self
@@ -46,21 +48,18 @@ class AcorrFilter(BaseEstimator, Filter):
         """
         return x.rolling(period).corr(x.shift(lag))
 
-    def get_filter(self, x):
+    def predict(self, x):
         xr = ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe)
         returns = xr.close.pct_change()
         ind = self.rolling_autocorrelation(returns, self.lag, self.period).shift(1)
-        r = pd.Series(0, index=ind.index)
-        r[ind <= self.mr] = -1
-        r[ind >= self.mo] = +1
-        return r
+        return (ind > self.threshold) if self.above else (ind < self.threshold)
 
 
-class VolatilityFilter(BaseEstimator, Filter):
+class VolatilityFilter(BaseEstimator):
     """
     Regime based on volatility
-       0: flat
-      +1: volatile market
+       False: flat
+       True:  volatile market
     """
 
     def __init__(self, timeframe, instant_period, typical_period, factor=1):
@@ -72,17 +71,17 @@ class VolatilityFilter(BaseEstimator, Filter):
     def fit(self, x, y, **kwargs):
         return self
 
-    def get_filter(self, x):
+    def predict(self, x):
         xr = ohlc_resample(x, self.timeframe)
         inst_vol = atr(xr, self.instant_period).shift(1)
         typical_vol = atr(xr, self.typical_period).shift(1)
-        r = pd.Series(0, index=xr.index)
-        r[inst_vol > typical_vol * self.factor] = +1
-
-        return r
+        return inst_vol > typical_vol * self.factor
 
 
-class AtrFilter(BaseEstimator, Filter):
+class AtrFilter(BaseEstimator):
+    """
+    Raw ATR filter
+    """
     def __init__(self, timeframe, period, threshold, tz='UTC'):
         self.timeframe = timeframe
         self.period = period
@@ -94,7 +93,4 @@ class AtrFilter(BaseEstimator, Filter):
 
     def get_filter(self, x):
         a = atr(ohlc_resample(x, self.timeframe, resample_tz=self.tz), self.period).shift(1)
-        r = pd.Series(0, index=x.index)
-        r[a > self.threshold] = +1
-        
-        return r
+        return a > self.threshold

@@ -3,8 +3,8 @@ from typing import Union
 import pandas as pd
 from sklearn.base import BaseEstimator
 
-from ira.analysis.timeseries import smooth, rsi
-from ira.analysis.tools import srows, scols
+from ira.analysis.timeseries import smooth, rsi, ema
+from ira.analysis.tools import srows, scols, apply_to_frame
 from qlearn.core.base import signal_generator
 from qlearn.core.data_utils import pre_close_time_shift
 from qlearn.core.utils import _check_frame_columns
@@ -18,6 +18,106 @@ def crossup(x, t: Union[pd.Series, float]):
 def crossdown(x, t: Union[pd.Series, float]):
     t1 = t.shift(1) if isinstance(t, pd.Series) else t
     return x[(x < t) & (x.shift(1) >= t1)].index
+
+
+class __Operations:
+    def fit(self, x, y, **fit_args):
+        mkt_info = getattr(self, 'market_info_')
+        for k, v in self.__dict__.items():
+            if isinstance(v, BaseEstimator) or hasattr(v, 'fit'):
+                v.market_info_ = mkt_info
+                v.fit(x, y, **fit_args)
+
+        # prevent time manipulations
+        self.exact_time = True
+        return self
+
+
+@signal_generator
+class Imply(BaseEstimator, __Operations):
+    """
+    Implication operator
+    """
+
+    def __init__(self, first, second, memory=0):
+        self.first = first
+        self.second = second
+        self.memory = memory
+
+    def predict(self, x):
+        f, s = self.first.predict(x), self.second.predict(x)
+
+        ws = scols(f, s, names=['s_first', 's_second'])
+        f2, s2 = ws['s_first'], ws['s_second']
+
+        track_memory = self.memory if self.memory > 0 else len(ws)
+        ws2 = scols(f2.ffill(limit=track_memory), s2).dropna()
+
+        impl = ws2[(ws2['s_first'] != 0) & (ws2['s_first'] == ws2['s_second'])]
+        return impl['s_second']
+
+
+@signal_generator
+class And(BaseEstimator, __Operations):
+    """
+    AND operator for filters or for signal and filter
+    """
+
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def predict(self, x):
+        lft = self.left.predict(x)
+        rgh = self.right.predict(x)
+
+        # if there is no filtering series raise exception
+        if lft.dtype != bool and rgh.dtype != bool:
+            raise Exception(
+                f"At least one of arguments of And must be series of booleans for using as filter\n"
+                f"Received {lft.dtype} and {rgh.dtype}"
+            )
+
+        flt_on, subj = (lft, rgh) if lft.dtype == bool else (rgh, lft)
+        mx = scols(flt_on, subj, names=['F', 'S']).ffill()
+        return mx[mx.F == True].S
+
+
+@signal_generator
+class Or(BaseEstimator, __Operations):
+    """
+    OR operator on filters
+    """
+
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def predict(self, x):
+        lft = self.left.predict(x)
+        rgh = self.right.predict(x)
+
+        # if there is no filtering series raise exception
+        if lft.dtype != bool and rgh.dtype != bool:
+            raise Exception(
+                f"Both arguments of Or must be series of booleans\n"
+                f"Received {lft.dtype} and {rgh.dtype}"
+            )
+        mx = scols(lft, rgh, names=['F1', 'F2']).ffill()
+        return (mx.F1 == True) | (mx.F2 == True)
+
+
+@signal_generator
+class Neg(BaseEstimator, __Operations):
+    """
+    Just reverses signals/filters
+    """
+
+    def __init__(self, predictor):
+        self.predictor = predictor
+
+    def predict(self, x):
+        return -self.predictor.predict(x)
 
 
 @signal_generator
@@ -128,6 +228,9 @@ class CrossingMovings(BaseEstimator):
 
 @signal_generator
 class Rsi(BaseEstimator):
+    """
+    Classical RSI entries generator
+    """
     def __init__(self, period, lower=25, upper=75, smoother='sma'):
         self.period = period
         self.upper = upper
@@ -141,3 +244,35 @@ class Rsi(BaseEstimator):
         price_col = self.market_info_.column
         r = rsi(x[price_col], self.period, smoother=self.smoother)
         return srows(pd.Series(+1, crossup(r, self.lower)), pd.Series(-1, crossdown(r, self.upper)))
+
+
+@signal_generator
+class OsiMomentum(BaseEstimator):
+    """
+    Outstretched momentum generator
+    It marks rising and falling momentum and then calculate an exponential moving average
+    based on the sum of the different momentum moves.
+    """
+    def __init__(self, period, smoothing, threshold=0.05):
+        self.period = period
+        self.smoothing = smoothing
+        self.threshold = threshold
+        if threshold > 1:
+            raise ValueError(f'Threshold parameter {threshold} exceedes 1 !')
+
+    def fit(self, x, y, **fit_args):
+        return self
+
+    def predict(self, x):
+        price_col = self.market_info_.column
+        c = x[price_col]
+
+        pos = (c > c.shift(self.period)) + 0
+        neg = (c < c.shift(self.period)) + 0
+        osi = apply_to_frame(ema, pos.rolling(self.period).sum() - neg.rolling(self.period).sum(), self.smoothing)
+
+        kt = self.period * (1 - self.threshold)
+        return srows(
+            pd.Series(+1, osi[(osi.shift(2) > -kt) & (osi.shift(1) > -kt) & (osi <= -kt)].index),
+            pd.Series(-1, osi[(osi.shift(2) < +kt) & (osi.shift(1) < +kt) & (osi >= +kt)].index)
+        )

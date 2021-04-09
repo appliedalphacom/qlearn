@@ -3,7 +3,7 @@ import types
 import warnings
 from datetime import timedelta
 from itertools import product
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -170,7 +170,10 @@ def get_object_params(obj, deep=True) -> dict:
     return out
 
 
-def search_params_init(e, to_skip=list(['verbose', 'memory'])):
+def ls_params(e, to_skip=list(['verbose', 'memory'])):
+    """
+    Show parameters of predictor as dictionary ready for GridSearchCV
+    """
     ps0 = e.get_params()
     res = []
 
@@ -186,3 +189,15 @@ def search_params_init(e, to_skip=list(['verbose', 'memory'])):
 
     res_s = ',\n'.join(res)
     print('{\n' + res_s + '\n}')
+
+
+def replicate_object_with_mixings(obj, fields_to_mix: Dict[str, Any]):
+    """
+    Make object instance replica with mixed fields
+    """
+    p_cls = obj.__class__
+    p_meths = {**p_cls.__dict__, **fields_to_mix}
+    new_p_cls = type(p_cls.__name__, tuple(p_cls.mro()[1:]), p_meths)
+    p_params = get_object_params(obj)
+
+    return new_p_cls(**p_params)
