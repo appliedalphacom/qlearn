@@ -179,9 +179,12 @@ def simulations_report(results: Union[mstruct, List[SimulationResult]], init_cas
         xs = f'%{f}' % x
         return green(xs) if x >= 0 else red(xs)
 
+    # max simulation name length for making more readable report
+    max_len = max([len(x.name) for x in rs if x.name is not None]) + 1
+
     for _r in rs:
         eqty = init_cash + _r.equity()
-        print(f'{blue(_r.name)} : ', end='')
+        print(f'{blue(_r.name):max_len} : ', end='')
 
         # skip negative results
         if only_positive and eqty[-1] < 0:
@@ -193,7 +196,7 @@ def simulations_report(results: Union[mstruct, List[SimulationResult]], init_cas
             print(
                 f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
                 f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
-                f'Gain: ${_fmt(eqty[-1])} | Execs: {len(_r.executions) if _r.executions else 0}', end=''
+                f'Gain: ${_fmt(eqty[-1])} | Execs: {len(_r.executions) if _r.executions is not None else 0}', end=''
             )
 
         if not only_report:
