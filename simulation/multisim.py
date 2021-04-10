@@ -184,7 +184,7 @@ def simulations_report(results: Union[mstruct, List[SimulationResult]], init_cas
 
     for _r in rs:
         eqty = init_cash + _r.equity()
-        print(f'{blue(_r.name.rjust(max_len))} : ', end='')
+        print(f'{blue(_r.name.ljust(max_len))} : ', end='')
 
         # skip negative results
         if only_positive and eqty[-1] < 0:
