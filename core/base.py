@@ -4,7 +4,7 @@ from typing import Union, Dict
 
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator
 from sklearn.model_selection._search import BaseSearchCV
 from sklearn.pipeline import Pipeline
 
@@ -12,9 +12,8 @@ from ira.utils.ui_utils import green
 from qlearn.core.data_utils import make_dataframe_from_dict, pre_close_time_shift
 from qlearn.core.metrics import ForwardReturnsCalculator
 from qlearn.core.pickers import AbstractDataPicker, SingleInstrumentPicker, PortfolioPicker
-from qlearn.core.structs import MarketInfo, _FIELD_MARKET_INFO, _FIELD_EXACT_TIME, _FIELD_FILTER_INDICATOR, \
-    QLEARN_VERSION
-from qlearn.core.utils import get_object_params
+from qlearn.core.structs import (MarketInfo,
+                                 _FIELD_MARKET_INFO, _FIELD_EXACT_TIME, _FIELD_FILTER_INDICATOR, QLEARN_VERSION)
 
 
 def predict_and_postprocess(class_predict_function):
@@ -58,6 +57,32 @@ def _decorate_class_method_if_exist(cls, method_name, decorator):
         setattr(cls, m[0][0], decorator(m[0][1]))
 
 
+def operation(op, *args):
+    """
+    Loads operation for predictor
+    """
+    from qlearn.core.operations import Imply, And, Or, Neg
+    ops = {
+        'imply': Imply,
+        'and': And,
+        'or': Or,
+        'neg': Neg
+    }
+
+    if op.lower() in ops:
+        return ops.get(op.lower())
+
+    raise Exception("Unknown operation {op} !")
+
+
+def __operator_impl_class__(op_class_name):
+    def operator(obj, *args):
+        op_class = operation(op_class_name)
+        return op_class(obj, *args)
+
+    return operator
+
+
 def signal_generator(cls):
     cls.__qlearn__ = QLEARN_VERSION
     setattr(cls, _FIELD_MARKET_INFO, None)
@@ -66,6 +91,21 @@ def signal_generator(cls):
     _decorate_class_method_if_exist(cls, 'predict', predict_and_postprocess)
     _decorate_class_method_if_exist(cls, 'predict_proba', predict_and_postprocess)
     _decorate_class_method_if_exist(cls, 'fit', preprocess_fitargs_and_fit)
+
+    # syntax sugar
+    setattr(cls, 'Imply', __operator_impl_class__('imply'))
+    setattr(cls, '__rshift__', __operator_impl_class__('imply'))
+
+    setattr(cls, 'And', __operator_impl_class__('and'))
+    setattr(cls, '__and__', __operator_impl_class__('and'))
+
+    setattr(cls, 'Or', __operator_impl_class__('or'))
+    setattr(cls, '__or__', __operator_impl_class__('or'))
+
+    setattr(cls, 'Neg', __operator_impl_class__('neg'))
+    setattr(cls, '__neg__', __operator_impl_class__('neg'))
+    setattr(cls, '__invert__', __operator_impl_class__('neg'))
+
     return cls
 
 
@@ -218,6 +258,7 @@ class SingleInstrumentComposer(MarketDataComposer):
     """
     Shortcut for MarketDataComposer(x, SingleInstrumentPicker(), ...)
     """
+
     def __init__(self, predictor, column='close', debug=False):
         super().__init__(predictor, SingleInstrumentPicker(), column, debug)
 
@@ -226,5 +267,6 @@ class PortfolioComposer(MarketDataComposer):
     """
     Shortcut for MarketDataComposer(x, PortfolioPicker(), ...)
     """
+
     def __init__(self, predictor, column='close', debug=False):
         super().__init__(predictor, PortfolioPicker(), column, debug)

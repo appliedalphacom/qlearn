@@ -2,8 +2,10 @@ from sklearn.base import BaseEstimator
 
 from ira.analysis.timeseries import adx, atr
 from ira.analysis.tools import ohlc_resample
+from qlearn import signal_generator
 
 
+@signal_generator
 class AdxFilter(BaseEstimator):
     """
     ADX based trend filter. When adx > threshold
@@ -23,6 +25,7 @@ class AdxFilter(BaseEstimator):
         return a.ADX > self.threshold
 
 
+@signal_generator
 class AcorrFilter(BaseEstimator):
     """
     Autocorrelation filter on returns series
@@ -55,6 +58,7 @@ class AcorrFilter(BaseEstimator):
         return (ind > self.threshold) if self.above else (ind < self.threshold)
 
 
+@signal_generator
 class VolatilityFilter(BaseEstimator):
     """
     Regime based on volatility
@@ -78,6 +82,7 @@ class VolatilityFilter(BaseEstimator):
         return inst_vol > typical_vol * self.factor
 
 
+@signal_generator
 class AtrFilter(BaseEstimator):
     """
     Raw ATR filter

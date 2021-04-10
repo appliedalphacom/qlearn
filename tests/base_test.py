@@ -1,17 +1,19 @@
 import unittest
 
+import numpy as np
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
 from sklearn.pipeline import make_pipeline
 
-from ira.analysis.timeseries import atr
-from ira.analysis.tools import srows, ohlc_resample, scols
-from qlearn.core.base import MarketDataComposer, signal_generator, _FIELD_FILTER_INDICATOR, QLEARN_VERSION
+from ira.analysis.tools import srows, drop_duplicated_indexes
+from qlearn import Imply, Neg, Or, And
+from qlearn.core.base import MarketDataComposer, signal_generator, SingleInstrumentComposer
 from qlearn.core.filters import AdxFilter
+from qlearn.core.generators import CrossingMovings, Rsi
 from qlearn.core.metrics import ForwardDirectionScoring
 from qlearn.core.pickers import SingleInstrumentPicker
-from qlearn.core.utils import debug_output
+from qlearn.core.utils import debug_output, ls_params
 
 
 @signal_generator
@@ -55,6 +57,41 @@ class RangeBreakoutDetectorTest(BaseEstimator):
         return srows(pd.Series(+1, X[l_i].index), pd.Series(-1, X[s_i].index))
 
 
+@signal_generator
+class Fp(BaseEstimator):
+    """
+    Some testing filter
+    """
+
+    def __init__(self, s, n):
+        self.s = s
+        self.n = n
+
+    def fit(self, x, y, **fit_params):
+        return self
+
+    def predict(self, x):
+        f = pd.Series(False, x.index)
+        b = len(x) // self.n
+        f[self.s * b: self.s * b + b] = True
+        return f
+
+
+@signal_generator
+class Gp(BaseEstimator):
+    def __init__(self, idxs):
+        self.idxs = idxs
+
+    def fit(self, x, y, **fit_params):
+        return self
+
+    def predict(self, x):
+        f = pd.Series(np.nan, x.index)
+        for i in self.idxs:
+            f.iloc[np.abs(i)] = np.sign(i)
+        return f.dropna()
+
+
 class BaseFunctionalityTests(unittest.TestCase):
     def setUp(self):
         self.data = pd.read_csv('data/ES.csv.gz', parse_dates=True, index_col=['time'])
@@ -85,11 +122,11 @@ class BaseFunctionalityTests(unittest.TestCase):
     def test_filters(self):
         f_wor = make_pipeline(
             WeekOpenRangeTest('4Min', 0.25),
-            AdxFilter('15Min', 20, 25, 'ema').apply_to(RangeBreakoutDetectorTest())
+            RangeBreakoutDetectorTest() & AdxFilter('1Min', 20, 10, 'ema')
         )
 
         m1 = MarketDataComposer(f_wor, SingleInstrumentPicker(), debug=True)
-        debug_output(m1.fit(self.data, None).predict(self.data), 'Predicted')
+        debug_output(m1.fit(self.data, None).predict(self.data).dropna(), 'Predicted')
 
         g1 = GridSearchCV(
             cv=TimeSeriesSplit(2),
@@ -97,10 +134,11 @@ class BaseFunctionalityTests(unittest.TestCase):
             scoring=ForwardDirectionScoring('30Min'),
             param_grid={
                 'weekopenrangetest__open_interval': [pd.Timedelta(x) - pd.Timedelta('1Min') for x in [
-                    '5Min', '10Min', '15Min', '20Min', '25Min', '30Min', '35Min', '40Min', '45Min'
+                    '5Min', '10Min', '15Min',
                 ]],
-                'pipeline__AdxFilter__period': [20, 30],
-                'pipeline__AdxFilter__timeframe': ['5Min', '15Min', '30Min']
+                'and__right__period': [20, 30],
+                'and__right__threshold': [15, 25],
+                'and__right__timeframe': ['1Min', '5Min', '15Min'],
             }, verbose=True
         )
 
@@ -108,4 +146,70 @@ class BaseFunctionalityTests(unittest.TestCase):
         mds.fit(self.data, None)
         print(g1.best_score_)
         print(g1.best_params_)
-        self.assertAlmostEqual(0.7692, g1.best_score_, delta=1e-4)
+        self.assertAlmostEqual(0.62637, g1.best_score_, delta=1e-4)
+
+    def test_ops(self):
+        cross = CrossingMovings(5, 15, 'ema', 'ema')
+        sup = Rsi(15, smoother='ema')
+        trend = AdxFilter('5Min', 20, 1, 'ema')
+
+        brk = make_pipeline(
+            WeekOpenRangeTest('4Min', 0.25),
+            (RangeBreakoutDetectorTest() >> cross >> sup) & trend
+        )
+
+        mds = SingleInstrumentComposer(brk, 'close')
+        mds.fit(self.data, None)
+
+        print(ls_params(brk))
+        print(mds.predict(self.data).dropna())
+
+    def test_ops2(self):
+        def S(est):
+            return SingleInstrumentComposer(est).fit(self.data[:7000], None).predict(self.data[:7000])
+
+        f0 = Fp(1, 5)
+        f1 = Fp(3, 5)
+        g0 = Gp([100, 1500, -1900, 2900, 5000, 6000])
+        g1 = Gp([300, -2500, 3000, 5100, 6100])
+
+        g21 = And(f0, Imply(g0, g1))
+        g22 = And(f1, Imply(g0, g1))
+        g23 = And((Or(Neg(f0), Neg(f1))), Imply(g0, g1))
+
+        r = drop_duplicated_indexes(
+            srows(S(g21).dropna(), S(g22).dropna(), S(g23).dropna())
+        )
+        self.assertTrue(
+            all(np.array([1, -1, 1, 1, 1]) == r.values.flatten())
+        )
+
+        # sugar test
+        sg21 = (g0 >> g1) & f0
+        sg22 = (g0 >> g1) & f1
+        sg23 = (g0 >> g1) & ~(f0 | f1)
+
+        sr = drop_duplicated_indexes(
+            srows(S(sg21).dropna(), S(sg22).dropna(), S(sg23).dropna())
+        )
+        print(sr)
+
+        self.assertTrue(
+            all(np.array([1, -1, 1, 1, 1]) == sr.values.flatten())
+        )
+        
+    def test_ops_imply_memory(self):
+        def S(est):
+            return SingleInstrumentComposer(est).fit(self.data[:1000], None).predict(self.data[:1000])
+
+        # memory parameter passing test
+        g01 = Gp([100])
+        g11 = Gp([110])
+
+        self.assertTrue(S(
+            (g01 >> g11)(memory=3)
+        ).dropna().empty)
+
+        self.assertFalse(S(
+            (g01 >> g11)(memory=11)
+        ).dropna().empty)
