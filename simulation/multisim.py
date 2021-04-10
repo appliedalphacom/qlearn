@@ -193,7 +193,7 @@ def simulations_report(results: Union[mstruct, List[SimulationResult]], init_cas
             print(
                 f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
                 f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
-                f'Gain: ${_fmt(eqty[-1])} ', end=''
+                f'Gain: ${_fmt(eqty[-1])} | Execs: {len(_r.executions) if _r.executions else 0}', end=''
             )
 
         if not only_report:
