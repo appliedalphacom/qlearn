@@ -187,7 +187,7 @@ class MarketDataComposer(BaseEstimator):
         """
         return self.selector.as_datasource(data)
 
-    def fit(self, X, y, **fit_params):
+    def fit(self, X, y=None, **fit_params):
         # reset fitted predictors
         self.fitted_predictors_ = {}
         self.best_params_ = {}
