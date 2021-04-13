@@ -110,7 +110,7 @@ def signal_generator(cls):
 
     setattr(cls, 'Mul', __operator_impl_class__('mul'))
     setattr(cls, '__mul__', __operator_impl_class__('mul'))
-    
+
     setattr(cls, 'Add', __operator_impl_class__('join'))
     setattr(cls, '__add__', __operator_impl_class__('join'))
 
@@ -244,6 +244,33 @@ class MarketDataComposer(BaseEstimator):
                 r = yh
 
         return make_dataframe_from_dict(r, 'frame')
+
+    def __rshift__(self, other):
+        return operation('imply')(self, other)
+
+    def __and__(self, other):
+        return operation('and')(self, other)
+
+    def __or__(self, other):
+        return operation('or')(self, other)
+
+    def __add__(self, other):
+        """
+        Support for joining of different predictions
+        """
+        return operation('join')(self, other)
+
+    def __mul__(self, other):
+        """
+        Support for multiplication on constant
+        """
+        return operation('mul')(self, other)
+
+    def __invert__(self):
+        return operation('neg')(self)
+
+    def __neg__(self):
+        return operation('neg')(self)
 
     def estimated_portfolio(self, x, forwards_calculator: ForwardReturnsCalculator):
         """
