@@ -61,12 +61,14 @@ def operation(op, *args):
     """
     Loads operation for predictor
     """
-    from qlearn.core.operations import Imply, And, Or, Neg
+    from qlearn.core.operations import Imply, And, Or, Neg, Mul, Join
     ops = {
         'imply': Imply,
         'and': And,
         'or': Or,
-        'neg': Neg
+        'neg': Neg,
+        'mul': Mul,
+        'join': Join,
     }
 
     if op.lower() in ops:
@@ -105,6 +107,12 @@ def signal_generator(cls):
     setattr(cls, 'Neg', __operator_impl_class__('neg'))
     setattr(cls, '__neg__', __operator_impl_class__('neg'))
     setattr(cls, '__invert__', __operator_impl_class__('neg'))
+
+    setattr(cls, 'Mul', __operator_impl_class__('mul'))
+    setattr(cls, '__mul__', __operator_impl_class__('mul'))
+    
+    setattr(cls, 'Add', __operator_impl_class__('join'))
+    setattr(cls, '__add__', __operator_impl_class__('join'))
 
     return cls
 

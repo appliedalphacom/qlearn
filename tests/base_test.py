@@ -213,3 +213,22 @@ class BaseFunctionalityTests(unittest.TestCase):
         self.assertFalse(S(
             (g01 >> g11)(memory=11)
         ).dropna().empty)
+
+    def test_ops_add_mul(self):
+        def S(est):
+            return SingleInstrumentComposer(est).fit(self.data[:1000], None).predict(self.data[:1000])
+
+        # memory parameter passing test
+        g01 = Gp([100])
+        g11 = Gp([110])
+        g12 = Gp([130])
+
+        sr = S(
+            g01 + g11 * 2 + g12 * 100
+        )
+
+        print(sr)
+        
+        self.assertTrue(
+            all(np.array([1, 2, 100]) == sr.values.flatten())
+        )

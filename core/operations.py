@@ -1,6 +1,6 @@
 from sklearn.base import BaseEstimator
 
-from ira.analysis.tools import scols
+from ira.analysis.tools import scols, srows
 from qlearn.core.base import _FIELD_MARKET_INFO
 from qlearn.core.generators import signal_generator
 
@@ -75,6 +75,47 @@ class And(BaseEstimator, __Operations):
         flt_on, subj = (lft, rgh) if lft.dtype == bool else (rgh, lft)
         mx = scols(flt_on, subj, names=['F', 'S'])
         return mx[mx.F == True].S
+
+
+@signal_generator
+class Mul(BaseEstimator, __Operations):
+    """
+    Mult operator for multiplication of signal
+    """
+
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def predict(self, x):
+        if isinstance(self.left, (int, float, bool)):
+            lft = self.left
+        else:
+            lft = self.left.predict(x)
+
+        if isinstance(self.right, (int, float, bool)):
+            rgh = self.right
+        else:
+            rgh = self.right.predict(x)
+
+        return lft * rgh
+
+
+@signal_generator
+class Join(BaseEstimator, __Operations):
+    """
+    Operator for joining signals
+    """
+
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def predict(self, x):
+        lft = self.left.predict(x)
+        rgh = self.right.predict(x)
+        # joins two series for duplicated keep last one
+        return srows(lft, rgh, keep='last')
 
 
 @signal_generator
