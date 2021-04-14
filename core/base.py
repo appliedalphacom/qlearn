@@ -12,8 +12,7 @@ from ira.utils.ui_utils import green
 from qlearn.core.data_utils import make_dataframe_from_dict, pre_close_time_shift
 from qlearn.core.metrics import ForwardReturnsCalculator
 from qlearn.core.pickers import AbstractDataPicker, SingleInstrumentPicker, PortfolioPicker
-from qlearn.core.structs import (MarketInfo,
-                                 _FIELD_MARKET_INFO, _FIELD_EXACT_TIME, _FIELD_FILTER_INDICATOR, QLEARN_VERSION)
+from qlearn.core.structs import (MarketInfo, _FIELD_MARKET_INFO, _FIELD_EXACT_TIME, QLEARN_VERSION)
 
 
 def predict_and_postprocess(class_predict_function):
@@ -24,16 +23,6 @@ def predict_and_postprocess(class_predict_function):
         # if this predictor doesn't provide tag and we operate with closes
         if not getattr(obj, _FIELD_EXACT_TIME, False) and obj.market_info_.column == 'close':
             yh = yh.shift(1, freq=pre_close_time_shift(xp))
-
-        # if we want to filter out signals
-        if hasattr(obj, _FIELD_FILTER_INDICATOR):
-            filter_indicator_name = getattr(obj, _FIELD_FILTER_INDICATOR)
-
-            # filter out predictions by filter's value (passed signals where filter > 0)
-            if filter_indicator_name is not None and filter_indicator_name in xp.columns:
-                ms = pd.merge_asof(yh.rename('S'), xp[filter_indicator_name].rename('F'), left_index=True,
-                                   right_index=True)
-                yh = ms[(ms.F > 0) & (ms.S != 0)].S
 
         return yh
 
@@ -89,7 +78,6 @@ def signal_generator(cls):
     cls.__qlearn__ = QLEARN_VERSION
     setattr(cls, _FIELD_MARKET_INFO, None)
     setattr(cls, _FIELD_EXACT_TIME, False)
-    setattr(cls, _FIELD_FILTER_INDICATOR, None)
     _decorate_class_method_if_exist(cls, 'predict', predict_and_postprocess)
     _decorate_class_method_if_exist(cls, 'predict_proba', predict_and_postprocess)
     _decorate_class_method_if_exist(cls, 'fit', preprocess_fitargs_and_fit)
@@ -246,6 +234,7 @@ class MarketDataComposer(BaseEstimator):
         return make_dataframe_from_dict(r, 'frame')
 
     def __rshift__(self, other):
+        # TODO: Test -> it doesn't work !!!
         return operation('imply')(self, other)
 
     def __and__(self, other):

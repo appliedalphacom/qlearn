@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Union, List, Dict
 
 QLEARN_VERSION = '0.0.5'
-_FIELD_FILTER_INDICATOR = 'filter_indicator'
 _FIELD_EXACT_TIME = 'exact_time'
 _FIELD_MARKET_INFO = 'market_info_'
 

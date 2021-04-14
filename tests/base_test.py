@@ -78,6 +78,22 @@ class Fp(BaseEstimator):
 
 
 @signal_generator
+class Mp(TransformerMixin):
+    """
+    Produces test transformations
+    """
+
+    def __init__(self, timeframe):
+        self.timeframe = timeframe
+
+    def fit(self, x, y, **kwargs):
+        return self
+
+    def transform(self, x):
+        return x.assign(midprice=(x.close + x.open)/2)
+
+
+@signal_generator
 class Gp(BaseEstimator):
     def __init__(self, idxs):
         self.idxs = idxs
@@ -232,3 +248,44 @@ class BaseFunctionalityTests(unittest.TestCase):
         self.assertTrue(
             all(np.array([1, 2, 100]) == sr.values.flatten())
         )
+
+    def test_operations_on_mdc(self):
+        def F(est):
+            return SingleInstrumentComposer(est)
+
+        data = {'ES': self.data}
+
+        g01 = F(Gp([100]))
+        g11 = F(Gp([110]))
+
+        p0 = F(make_pipeline(Mp('1Min'), Gp([100])))
+        p1 = F(make_pipeline(Mp('1Min'), Gp([110])))
+        p2 = F(make_pipeline(Mp('1Min'), Gp([-115])))
+
+        print(
+            F(((p0 >> g11) + p2) * 10).fit(data, None).predict(data),
+            '\n--------------'
+        )
+
+        print(
+            # p0 -> g11 -> opposite p2
+            F(-(p0 >> g11 >> -p2)*10).fit(data, None).predict(data)
+        )
+
+        print(
+            (p0 + p1 * 100).fit(data, None).predict(data)
+        )
+
+        print(
+            (g01 + g11 * 100).fit(data, None).predict(data)
+        )
+
+        print(
+            (g01 + g11 * 100).fit(self.data, None).predict(self.data)
+        )
+
+        print(
+            ((g01 >> g11) * 2).fit(self.data, None).predict(self.data)
+        )
+
+

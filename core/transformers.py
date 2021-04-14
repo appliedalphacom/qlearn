@@ -116,7 +116,7 @@ class Pivots(TransformerMixin):
         self.method = method
         self.tz = tz
 
-    def fit(self, x, **kwargs):
+    def fit(self, x, y, **kwargs):
         return self
 
     def transform(self, x):

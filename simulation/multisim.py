@@ -83,7 +83,7 @@ class SimSetup:
         if self.signal_type == _Types.ESTIMATOR:
             if isinstance(sx, MarketDataComposer):
                 sx = sx.for_interval(start, stop)
-            return sx.predict(data)
+            sx = sx.predict(data)
 
         _z = slice(start, stop) if start is not None and stop is not None else None
         return sx[_z] if _z is not None else sx
