@@ -73,8 +73,12 @@ class And(BaseEstimator, __Operations):
             )
 
         flt_on, subj = (lft, rgh) if lft.dtype == bool else (rgh, lft)
-        mx = scols(flt_on, subj, names=['F', 'S'])
-        return mx[mx.F == True].S
+
+        # mx = scols(flt_on, subj, names=['F', 'S'])
+        # return mx[mx.F == True].S
+
+        sf = scols(flt_on, subj, names=['F', 'S'])
+        return sf['S'].reindex(sf['F'].ffill().replace({False: None}).dropna().index).dropna()
 
 
 @signal_generator
