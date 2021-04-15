@@ -12,4 +12,4 @@ from qlearn.tracking.trackers import (
 from qlearn.core.utils import ls_params, debug_output, permutate_params
 from qlearn.core.generators import crossup, crossdown
 from sklearn.pipeline import make_pipeline
-from qlearn.simulation.multisim import simulation, simulations_report
+from qlearn.simulation.multisim import simulation

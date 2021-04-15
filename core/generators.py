@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 
 from ira.analysis.timeseries import smooth, rsi, ema
-from ira.analysis.tools import srows, scols, apply_to_frame
+from ira.analysis.tools import srows, scols, apply_to_frame, ohlc_resample
 from qlearn.core.base import signal_generator
 from qlearn.core.data_utils import pre_close_time_shift
 from qlearn.core.utils import _check_frame_columns
@@ -175,4 +175,35 @@ class OsiMomentum(BaseEstimator):
         return srows(
             pd.Series(+1, osi[(osi.shift(2) > -kt) & (osi.shift(1) > -kt) & (osi <= -kt)].index),
             pd.Series(-1, osi[(osi.shift(2) < +kt) & (osi.shift(1) < +kt) & (osi >= +kt)].index)
+        )
+
+
+@signal_generator
+class InternalBarStrength(BaseEstimator):
+    """
+    Internal bar strength mean reverting generator.
+    when:
+        | close is > (high - T) -> -1
+        | close is < (low + T)  -> +1
+
+    T in (0 ... 1/2)
+    """
+    def __init__(self, timeframe, threshold, tz='UTC'):
+        self.timeframe = timeframe
+        self.threshold = threshold
+        self.tz = tz
+        if threshold >= 0.5 or threshold <= 0:
+            raise ValueError(f'Threshold parameter {threshold} must be in (0 ... 0.5) range !')
+
+    def fit(self, x, y, **fit_args):
+        return self
+
+    def predict(self, x):
+        _check_frame_columns(x, 'open', 'close', 'high', 'low')
+
+        xf = ohlc_resample(x, self.timeframe, resample_tz=self.tz)
+        ibs = (xf.close - xf.low) / (xf.high - xf.low)
+        return srows(
+            pd.Series(+1, ibs[ibs < self.threshold].index),
+            pd.Series(-1, ibs[ibs > 1 - self.threshold].index)
         )

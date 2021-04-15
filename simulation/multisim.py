@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List, Union
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -139,6 +140,65 @@ def _proc_run(s: SimSetup, data, start, stop, broker, spreads):
     return b
 
 
+@dataclass
+class MultiResults:
+    """
+    Store multiple simulations results
+    """
+    results: List[SimulationResult]
+    project: str
+    broker: str
+    start: Union[str, pd.Timestamp]
+    stop: Union[str, pd.Timestamp]
+
+    def __add__(self, other):
+        if not isinstance(other, MultiResults):
+            raise ValueError(f"Don't know how to add {type(other)} data to results !")
+
+        if self.project != other.project:
+            raise ValueError(f"You can't add results from another project {other.project}")
+
+        brok = self.broker if self.broker == other.broker else f'{self.broker},{other.broker}'
+        return MultiResults(self.results + other.results, self.project, brok, self.start, self.stop)
+
+    def report(self, init_cash=0, risk_free=0.0, margin_call_pct=0.33, only_report=False, only_positive=False):
+        import matplotlib.pyplot as plt
+        rs = self.results
+
+        def _fmt(x, f='.2f'):
+            xs = f'%{f}' % x
+            return green(xs) if x >= 0 else red(xs)
+
+        # max simulation name length for making more readable report
+        max_len = max([len(x.name) for x in rs if x.name is not None]) + 1
+
+        for _r in rs:
+            eqty = init_cash + _r.equity()
+            print(f'{blue(_r.name.ljust(max_len))} : ', end='')
+
+            # skip negative results
+            if only_positive and eqty[-1] < 0:
+                print(red('[SKIPPED]'))
+                continue
+
+            if init_cash > 0:
+                prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct)
+                print(
+                    f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
+                    f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
+                    f'Gain: ${_fmt(eqty[-1])} | Execs: {len(_r.executions) if _r.executions is not None else 0}', end=''
+                )
+
+            if not only_report:
+                plt.plot(eqty, label=_r.name)
+
+            print(yellow('[OK]'))
+
+        if not only_report:
+            plt.title(f'Comparison simualtions for {self.project} @ {self.broker}')
+            plt.legend()
+
+
 def simulation(setup, data, broker='', project='', start=None, stop=None, spreads=0, multiproc=False):
     """
     Simulate different cases
@@ -152,58 +212,4 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
             b = _proc_run(s, data, start, stop, broker, spreads)
             results.append(b)
 
-    return mstruct(results=results, project=project, broker=broker, start=start, stop=stop)
-
-
-def simulations_report(results: Union[mstruct, List[SimulationResult]], init_cash=0, risk_free=0.0,
-                       margin_call_pct=0.33,
-                       only_report=False, only_positive=False):
-    """
-    Plot multisim report
-    """
-    import matplotlib.pyplot as plt
-
-    rs = None
-    if isinstance(results, list):
-        rs = results
-        project = ''
-        broker = ''
-    elif isinstance(results, mstruct):
-        rs = results.results
-        project = results.project
-        broker = results.broker
-    else:
-        raise ValueError("Can't recognize results structure !")
-
-    def _fmt(x, f='.2f'):
-        xs = f'%{f}' % x
-        return green(xs) if x >= 0 else red(xs)
-
-    # max simulation name length for making more readable report
-    max_len = max([len(x.name) for x in rs if x.name is not None]) + 1
-
-    for _r in rs:
-        eqty = init_cash + _r.equity()
-        print(f'{blue(_r.name.ljust(max_len))} : ', end='')
-
-        # skip negative results
-        if only_positive and eqty[-1] < 0:
-            print(red('[SKIPPED]'))
-            continue
-
-        if init_cash > 0:
-            prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct)
-            print(
-                f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
-                f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
-                f'Gain: ${_fmt(eqty[-1])} | Execs: {len(_r.executions) if _r.executions is not None else 0}', end=''
-            )
-
-        if not only_report:
-            plt.plot(eqty, label=_r.name)
-
-        print(yellow('[OK]'))
-
-    if not only_report:
-        plt.title(f'Comparison simualtions for {project} @ {broker}')
-        plt.legend()
+    return MultiResults(results=results, project=project, broker=broker, start=start, stop=stop)
