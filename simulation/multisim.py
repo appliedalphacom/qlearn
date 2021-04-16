@@ -161,7 +161,8 @@ class MultiResults:
         brok = self.broker if self.broker == other.broker else f'{self.broker},{other.broker}'
         return MultiResults(self.results + other.results, self.project, brok, self.start, self.stop)
 
-    def report(self, init_cash=0, risk_free=0.0, margin_call_pct=0.33, only_report=False, only_positive=False):
+    def report(self, init_cash=0, risk_free=0.0, margin_call_pct=0.33, only_report=False,
+               only_positive=False, commissions=0):
         import matplotlib.pyplot as plt
         rs = self.results
 
@@ -173,7 +174,7 @@ class MultiResults:
         max_len = max([len(x.name) for x in rs if x.name is not None]) + 1
 
         for _r in rs:
-            eqty = init_cash + _r.equity()
+            eqty = init_cash + _r.equity(commissions=commissions)
             print(f'{blue(_r.name.ljust(max_len))} : ', end='')
 
             # skip negative results
@@ -182,7 +183,7 @@ class MultiResults:
                 continue
 
             if init_cash > 0:
-                prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct)
+                prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct, commissions=commissions)
                 print(
                     f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
                     f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
