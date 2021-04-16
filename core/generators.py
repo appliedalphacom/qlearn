@@ -192,6 +192,7 @@ class InternalBarStrength(BaseEstimator):
         self.timeframe = timeframe
         self.threshold = threshold
         self.tz = tz
+        self.exact_time = True
         if threshold >= 0.5 or threshold <= 0:
             raise ValueError(f'Threshold parameter {threshold} must be in (0 ... 0.5) range !')
 
@@ -202,7 +203,11 @@ class InternalBarStrength(BaseEstimator):
         _check_frame_columns(x, 'open', 'close', 'high', 'low')
 
         xf = ohlc_resample(x, self.timeframe, resample_tz=self.tz)
-        ibs = (xf.close - xf.low) / (xf.high - xf.low)
+
+        # on next bar openinig
+        self.exact_time = True
+        ibs = ((xf.close - xf.low) / (xf.high - xf.low)).shift(1)
+
         return srows(
             pd.Series(+1, ibs[ibs < self.threshold].index),
             pd.Series(-1, ibs[ibs > 1 - self.threshold].index)
