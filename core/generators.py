@@ -77,7 +77,7 @@ class RangeBreakoutDetector(BaseEstimator):
 @signal_generator
 class PivotsBreakoutDetector(BaseEstimator):
     @staticmethod
-    def _to_list(x):
+    def _tolist(x):
         return [x] if not isinstance(x, (list, tuple)) else x
 
     def __init__(self, resistances, supports):
