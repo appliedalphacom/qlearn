@@ -81,8 +81,8 @@ class PivotsBreakoutDetector(BaseEstimator):
         return [x] if not isinstance(x, (list, tuple)) else x
 
     def __init__(self, resistances, supports):
-        self.res_levels = self._tolist(resistances)
-        self.sup_levels = self._tolist(supports)
+        self.resistances = self._tolist(resistances)
+        self.supports = self._tolist(supports)
 
     def fit(self, X, y, **fit_params):
         return self
@@ -95,11 +95,11 @@ class PivotsBreakoutDetector(BaseEstimator):
         breaks = srows(
             # breaks up levels specified as resistance
             *[pd.Series(+1, t[(t.open_1 < t[ul]) & (t.close_1 < t[ul]) & (t.close > t[ul])].index) for ul in
-              self.res_levels if ul in cols],
+              self.resistances if ul in cols],
 
             # breaks down levels specified as supports
             *[pd.Series(-1, t[(t.open_1 > t[bl]) & (t.close_1 > t[bl]) & (t.close < t[bl])].index) for bl in
-              self.sup_levels if bl in cols],
+              self.supports if bl in cols],
             keep='last')
         return breaks
 
