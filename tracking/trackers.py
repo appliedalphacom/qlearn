@@ -4,6 +4,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
+from ira.series.Indicators import ATR
 from ira.simulator.SignalTester import Tracker
 
 
@@ -444,3 +445,46 @@ class PipelineTracker(Tracker):
             if s is not None:
                 r.update(s)
         return r
+
+
+class ATRTracker(TakeStopTracker):
+    """
+    ATR based risk management
+    Take at entry +/- ATR[1] * take_target
+    Stop at entry -/+ ATR[1] * stop_rosk
+    """
+    def __init__(self, size, timeframe, period, take_target, stop_risk, debug=False):
+        super().__init__(debug)
+        self.timeframe = timeframe
+        self.period = period
+        self.position_size = size
+        self.take_target = take_target
+        self.stop_risk = stop_risk
+
+    def initialize(self):
+        self.atr = ATR(self.period)
+        self.ohlc = self.get_ohlc_series(self.timeframe)
+        self.ohlc.attach(self.atr)
+
+    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+        av = self.atr[1]
+        if av is None or not np.isfinite(av):
+            # skip if ATR is not calculated yet
+            return None
+
+        if signal_qty > 0:
+            if self.stop_risk > 0:
+                self.stop_at(signal_time, ask - self.stop_risk * av)
+
+            if self.take_target > 0:
+                self.take_at(signal_time, ask + self.take_target * av)
+
+        elif signal_qty < 0:
+            if self.stop_risk > 0:
+                self.stop_at(signal_time, bid + self.stop_risk * av)
+
+            if self.take_target > 0:
+                self.take_at(signal_time, bid - self.take_target * av)
+
+        # call super method
+        return signal_qty * self.position_size

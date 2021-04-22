@@ -5,7 +5,7 @@ from qlearn.core.metrics import ForwardDirectionScoring, ForwardReturnsSharpeSco
 from qlearn.core.operations import Imply, And, Or, Neg
 from qlearn.tracking.trackers import (
     Tracker, FixedTrader, DispatchTracker, PipelineTracker, TakeStopTracker,
-    TimeExpirationTracker, TurtleTracker, ProgressionTracker
+    TimeExpirationTracker, TurtleTracker, ProgressionTracker, ATRTracker
 )
 
 # some helpers
