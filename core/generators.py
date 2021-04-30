@@ -149,11 +149,33 @@ class Rsi(BaseEstimator):
 @signal_generator
 class OsiMomentum(BaseEstimator):
     """
-    Outstretched momentum generator
-    It marks rising and falling momentum and then calculate an exponential moving average
-    based on the sum of the different momentum moves.
+    Outstretched momentum contrarian generator
+
+    The idea is to mark rising and falling momentum and then calculate an exponential moving average based on the sum
+    of the different momentum moves.
+
+    The steps can be summed up as follows:
+
+    - Select a momentum lookback and a moving average lookback. By default we can use 3 and 5.
+
+    - Create two columns called the Positive Stretch and the Negative Stretch,
+      where the first one has 1’s if the current closing price is greater than the closing price 3 periods ago
+      and the other one has 1’s if the current closing price is lower than the closing price 3 periods ago.
+
+    - Sum the latest three positive and negative stretches and subtract the results from each other.
+      This is called the Raw Outstretch.
+
+    - Finally, to get the Outstretched Indicator, we take the 5-period exponential moving average of the Raw Outstretch.
+
     """
     def __init__(self, period, smoothing, threshold=0.05):
+        """
+        :param period: period of momentum
+        :param smoothing: period of ema smoothing
+        :param threshold: threshold for entries. Max abs indicator value is period we generate long entries
+                          when indicator crosses down lower threshold (period-T) and
+                          short whem it crosses up upper threshold (-(period-T))
+        """
         self.period = period
         self.smoothing = smoothing
         self.threshold = threshold
