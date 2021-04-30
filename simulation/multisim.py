@@ -162,7 +162,8 @@ class MultiResults:
         return MultiResults(self.results + other.results, self.project, brok, self.start, self.stop)
 
     def __getitem__(self, key):
-        return MultiResults(self.results[key], self.project, self.broker, self.start, self.stop)
+        s = self.results[key]
+        return MultiResults(s if isinstance(s, list) else [s], self.project, self.broker, self.start, self.stop)
 
     def report(self, init_cash=0, risk_free=0.0, margin_call_pct=0.33, only_report=False,
                only_positive=False, commissions=0):
