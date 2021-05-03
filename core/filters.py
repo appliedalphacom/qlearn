@@ -139,4 +139,4 @@ class ChoppinessFilter(BaseEstimator):
         f0 = pd.Series(np.nan, ci.index)
         f0[ci >= self.upper] = True
         f0[ci <= self.lower] = False
-        return f0.ffill()
+        return f0.ffill().fillna(False)
