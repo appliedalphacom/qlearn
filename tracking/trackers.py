@@ -453,16 +453,17 @@ class ATRTracker(TakeStopTracker):
     Take at entry +/- ATR[1] * take_target
     Stop at entry -/+ ATR[1] * stop_rosk
     """
-    def __init__(self, size, timeframe, period, take_target, stop_risk, debug=False):
+    def __init__(self, size, timeframe, period, take_target, stop_risk, atr_smoother='sma', debug=False):
         super().__init__(debug)
         self.timeframe = timeframe
         self.period = period
         self.position_size = size
         self.take_target = take_target
         self.stop_risk = stop_risk
+        self.atr_smoother = atr_smoother
 
     def initialize(self):
-        self.atr = ATR(self.period)
+        self.atr = ATR(self.period, self.atr_smoother)
         self.ohlc = self.get_ohlc_series(self.timeframe)
         self.ohlc.attach(self.atr)
 

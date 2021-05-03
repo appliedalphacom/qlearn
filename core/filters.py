@@ -1,7 +1,10 @@
+import numpy as np
+import pandas as pd
+from ira.analysis import column_vector
 from sklearn.base import BaseEstimator
 
 from ira.analysis.timeseries import adx, atr
-from ira.analysis.tools import ohlc_resample
+from ira.analysis.tools import ohlc_resample, rolling_sum
 from qlearn import signal_generator
 
 
@@ -87,6 +90,7 @@ class AtrFilter(BaseEstimator):
     """
     Raw ATR filter
     """
+
     def __init__(self, timeframe, period, threshold, tz='UTC'):
         self.timeframe = timeframe
         self.period = period
@@ -99,3 +103,40 @@ class AtrFilter(BaseEstimator):
     def get_filter(self, x):
         a = atr(ohlc_resample(x, self.timeframe, resample_tz=self.tz), self.period).shift(1)
         return a > self.threshold
+
+
+@signal_generator
+class ChoppinessFilter(BaseEstimator):
+    """
+    Volatile market leads to false breakouts, and not respecting support/resistance levels (being choppy),
+    We cannot know whether we are in a trend or in a range.
+
+    Values above 61.8% indicate a choppy market that is bound to breakout. We should be ready for some directional.
+    Values below 38.2% indicate a strong trending market that is bound to stabilize.
+    """
+
+    def __init__(self, timeframe, period, upper=61.8, lower=38.2, tz='UTC', atr_smoother='sma'):
+        self.period = period
+        self.upper = upper
+        self.lower = lower
+        self.timeframe = timeframe
+        self.tz = tz
+        self.atr_smoother = atr_smoother
+
+    def fit(self, x, y, **kwargs):
+        return self
+
+    def predict(self, x):
+        xr = ohlc_resample(x[['open', 'high', 'low', 'close']], self.timeframe, resample_tz=self.tz)
+        a = atr(xr, self.period, self.atr_smoother)
+
+        rng = xr.high.rolling(window=self.period, min_periods=self.period).max() \
+              - xr.low.rolling(window=self.period, min_periods=self.period).min()
+        
+        rs = pd.Series(rolling_sum(column_vector(a.copy()), self.period).flatten(), a.index)
+        ci = 100 * np.log(rs / rng) * (1 / np.log(self.period))
+
+        f0 = pd.Series(np.nan, ci.index)
+        f0[ci >= self.upper] = True
+        f0[ci <= self.lower] = False
+        return f0.ffill()
