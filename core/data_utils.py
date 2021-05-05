@@ -55,7 +55,7 @@ def time_delta_to_str(d: Union[int, timedelta_t, pd.Timedelta]):
     :param d:
     :return:
     """
-    seconds = d.seconds if isinstance(d, pd.Timedelta) else d.total_seconds() if isinstance(d, timedelta_t) else int(d)
+    seconds = d.total_seconds() if isinstance(d, (pd.Timedelta, timedelta_t)) else int(d)
     days, seconds = divmod(seconds, 86400)
     hours, seconds = divmod(seconds, 3600)
     minutes, seconds = divmod(seconds, 60)
