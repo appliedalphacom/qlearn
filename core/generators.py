@@ -131,6 +131,7 @@ class Rsi(BaseEstimator):
     """
     Classical RSI entries generator
     """
+
     def __init__(self, period, lower=25, upper=75, smoother='sma'):
         self.period = period
         self.upper = upper
@@ -168,6 +169,7 @@ class OsiMomentum(BaseEstimator):
     - Finally, to get the Outstretched Indicator, we take the 5-period exponential moving average of the Raw Outstretch.
 
     """
+
     def __init__(self, period, smoothing, threshold=0.05):
         """
         :param period: period of momentum
@@ -210,6 +212,7 @@ class InternalBarStrength(BaseEstimator):
 
     T in (0 ... 1/2)
     """
+
     def __init__(self, timeframe, threshold, tz='UTC'):
         self.timeframe = timeframe
         self.threshold = threshold
@@ -233,4 +236,38 @@ class InternalBarStrength(BaseEstimator):
         return srows(
             pd.Series(+1, ibs[ibs < self.threshold].index),
             pd.Series(-1, ibs[ibs > 1 - self.threshold].index)
+        )
+
+
+@signal_generator
+class Equilibrium(BaseEstimator):
+    """
+        - Calculate a simple N-period moving average of the market price.
+        - Subtract the current market price from its moving average.
+        - Calculate a N-period exponential moving average on the subtracted values.
+
+        The result is the N-period Equilibrium Indicator that we will use to generate mean-reverting signals.
+    """
+
+    def __init__(self, period, threshold, smoother='sma'):
+        self.period = period
+        self.smoother = smoother
+        self.threshold = threshold
+
+    def fit(self, x, y, **kwargs):
+        return self
+
+    def predict(self, x):
+        c = x[self.market_info_.column]
+        k1 = smooth(c, self.smoother, self.period)
+        dK = smooth(k1 - c, 'ema', self.period)
+
+        return srows(
+            pd.Series(-1, dK[
+                ((dK.shift(2) < +self.threshold) & ((dK.shift(1) < +self.threshold) & (dK > +self.threshold)))
+            ].index),
+
+            pd.Series(+1, dK[
+                ((dK.shift(2) > -self.threshold) & ((dK.shift(1) > -self.threshold) & (dK < -self.threshold)))
+            ].index)
         )

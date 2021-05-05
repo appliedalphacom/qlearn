@@ -166,7 +166,7 @@ class MultiResults:
         return MultiResults(s if isinstance(s, list) else [s], self.project, self.broker, self.start, self.stop)
 
     def report(self, init_cash=0, risk_free=0.0, margin_call_pct=0.33, only_report=False,
-               only_positive=False, commissions=0):
+               only_positive=False, commissions=0) -> pd.DataFrame:
         import matplotlib.pyplot as plt
         rs = self.results
 
@@ -177,9 +177,13 @@ class MultiResults:
         # max simulation name length for making more readable report
         max_len = max([len(x.name) for x in rs if x.name is not None]) + 1
 
-        for _r in rs:
+        # here we will collect report's data
+        rpt = {}
+
+        for k, _r in enumerate(rs):
             eqty = init_cash + _r.equity(commissions=commissions)
-            print(f'{blue(_r.name.ljust(max_len))} : ', end='')
+            o_num = f'{k:2d}'
+            print(f'{yellow(o_num)}: {blue(_r.name.ljust(max_len))} : ', end='')
 
             # skip negative results
             if only_positive and eqty[-1] < 0:
@@ -188,10 +192,18 @@ class MultiResults:
 
             if init_cash > 0:
                 prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct, commissions=commissions)
+                n_execs = len(_r.executions) if _r.executions is not None else 0
+
+                rpt[_r.name] = {
+                    'sharpe': prf.sharpe, 'sortino': prf.sortino, 'cagr': 100 * prf.cagr,
+                    'dd': prf.mdd_usd, 'dd_pct': prf.drawdown_pct,
+                    'gain': eqty[-1] - eqty[0], 'number_executions': n_execs
+                }
+
                 print(
                     f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
                     f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
-                    f'Gain: ${_fmt(eqty[-1])} | Execs: {len(_r.executions) if _r.executions is not None else 0}', end=''
+                    f'Gain: ${_fmt(eqty[-1] - eqty[0])} | Execs: {n_execs}', end=''
                 )
 
             if not only_report:
@@ -202,6 +214,11 @@ class MultiResults:
         if not only_report:
             plt.title(f'Comparison simualtions for {self.project} @ {self.broker}')
             plt.legend()
+
+        # return report as dataframe
+        df = pd.DataFrame.from_dict(rpt, orient='index')
+        df.index.name = 'Name'
+        return df.reset_index()
 
 
 def simulation(setup, data, broker='', project='', start=None, stop=None, spreads=0, multiproc=False):
