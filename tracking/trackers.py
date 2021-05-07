@@ -217,7 +217,7 @@ class TurtleTracker(TakeStopTracker):
         self._last_entry_price = np.nan
 
     def _get_size_at_risk(self):
-        return (self.account_size + self.reinvest_pnl_pct * self._position.pnl) * self.risk_capital_pct
+        return (self.account_size + max(self.reinvest_pnl_pct * self._position.pnl, 0)) * self.risk_capital_pct
 
     def _calculate_trade_size_crypto(self, direction, vlt, price):
         price2 = price + direction * vlt
