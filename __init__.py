@@ -12,5 +12,6 @@ from qlearn.tracking.trackers import (
 from qlearn.core.utils import ls_params, debug_output, permutate_params
 from qlearn.core.generators import crossup, crossdown
 from qlearn.core.mlhelpers import gridsearch
+from qlearn.core.data_utils import shift_for_timeframe
 from sklearn.pipeline import make_pipeline
 from qlearn.simulation.multisim import simulation

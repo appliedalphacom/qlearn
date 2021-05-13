@@ -154,6 +154,7 @@ class ReverseSignalsSharpeScoring(ForwardReturnsSharpeScoring):
 
         # we need only points where position is reversed
         revere_pts = signals[signals.diff() != 0].dropna()
-        prices = prices.loc[revere_pts.index]
+        # prices = prices.loc[revere_pts.index]
+        prices = prices.reindex(index=revere_pts.index, method='ffill')
         f_prices = prices.shift(-1)
         return self._returns_with_commissions_crypto_aware(prices, f_prices, signals)

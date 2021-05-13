@@ -71,6 +71,15 @@ def time_delta_to_str(d: Union[int, timedelta_t, pd.Timedelta]):
     return r
 
 
+def shift_for_timeframe(signals: pd.Series, data: pd.DataFrame, tf: Union[str, pd.Timedelta]) -> pd.Series:
+    """
+    Shift signals to future by timeframe - timeframe(data)
+    """
+    t = pd.Timedelta(infer_series_frequency(data[:100]))
+    tf = pd.Timedelta(tf)
+    return signals.shift(1, freq=tf - t) if tf > t else signals
+
+
 def timeseries_density(dx, period='1Min'):
     """
     Detect average records density per period
