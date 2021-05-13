@@ -493,8 +493,8 @@ class ATRTracker(TakeStopTracker):
 
 class RADChandelier(TakeStopTracker):
     """
-    RAD chandelier position tracker (no pyramiding, only trailing stop exits)
-
+    RAD chandelier position tracker (no pyramiding only trailing stop)
+    
     https://corporatefinanceinstitute.com/resources/knowledge/trading-investing/chandelier-exit/
     """
 
@@ -523,6 +523,7 @@ class RADChandelier(TakeStopTracker):
 
         # highest high / lower low
         ll, hh = m
+
         if not np.isfinite(av) or not np.isfinite(ll) or not np.isfinite(hh):
             # skip if ATR/hilo is not calculated yet
             return None, None
@@ -533,6 +534,7 @@ class RADChandelier(TakeStopTracker):
         return s_stop, l_stop
 
     def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
+        s_stop, l_stop = self.get_stops()
         qty = self._position.quantity
 
         if qty != 0:
@@ -542,13 +544,11 @@ class RADChandelier(TakeStopTracker):
             # check if we should pullup/down
             if qty > 0 and l_stop > self.stop:
                 self.stop_at(quote_time, l_stop)
-                if self.debug:
-                    print(f'[{quote_time}] {self._instrument} pull up stop to {l_stop}')
+                self.debug(f'[{quote_time}] {self._instrument} pull up stop to {l_stop}')
 
             if qty < 0 and s_stop < self.stop:
                 self.stop_at(quote_time, s_stop)
-                if self.debug:
-                    print(f'[{quote_time}] {self._instrument} pull down stop to {s_stop}')
+                self.debug(f'[{quote_time}] {self._instrument} pull down stop to {s_stop}')
 
         super().on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
 
@@ -567,21 +567,17 @@ class RADChandelier(TakeStopTracker):
         if signal_qty > 0:
             if ask > l_stop:
                 self.stop_at(signal_time, l_stop)
-                if self.debug:
-                    print(f'[{quote_time}] {self._instrument} entry long at ${ask} stop to {l_stop}')
+                self.debug(f'[{quote_time}] {self._instrument} entry long at ${ask} stop to {l_stop}')
             else:
-                if self.debug:
-                    print(f'[{quote_time}] {self._instrument} skip long : stop {l_stop} is above entry {ask}')
+                self.debug(f'[{quote_time}] {self._instrument} skip long : stop {l_stop} is above entry {ask}')
                 signal_qty = np.nan
 
         elif signal_qty < 0:
             if bid < s_stop:
                 self.stop_at(signal_time, s_stop)
-                if self.debug:
-                    print(f'[{quote_time}] {self._instrument} entry short at ${bid} stop to {s_stop}')
+                self.debug(f'[{quote_time}] {self._instrument} entry short at ${bid} stop to {s_stop}')
             else:
-                if self.debug:
-                    print(f'[{quote_time}] {self._instrument} skip short : stop {s_stop} is below entry {bid}')
+                self.debug(f'[{quote_time}] {self._instrument} skip short : stop {s_stop} is below entry {bid}')
                 signal_qty = np.nan
 
         # call super method
