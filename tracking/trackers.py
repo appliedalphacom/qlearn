@@ -264,7 +264,7 @@ class TurtleTracker(TakeStopTracker):
                 self.trade(quote_time, new_pos, f'increased position to {new_pos} at {self._last_entry_price}')
 
                 # average position price
-                avg_price = self._position.cost_usd / abs(self._position.quantity)
+                avg_price = self._position.cost_usd / self._position.quantity
 
                 # pull stops
                 if self.pull_stops:
@@ -494,7 +494,7 @@ class ATRTracker(TakeStopTracker):
 class RADChandelier(TakeStopTracker):
     """
     RAD chandelier position tracker (no pyramiding only trailing stop)
-    
+
     https://corporatefinanceinstitute.com/resources/knowledge/trading-investing/chandelier-exit/
     """
 
