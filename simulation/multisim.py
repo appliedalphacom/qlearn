@@ -9,7 +9,7 @@ from sklearn.pipeline import Pipeline
 
 from ira.simulator.SignalTester import Tracker, SimulationResult
 from ira.utils.nb_functions import z_backtest
-from ira.utils.utils import mstruct
+from ira.utils.utils import mstruct, runtime_env
 from qlearn import MarketDataComposer
 
 from ira.utils.ui_utils import red, green, yellow, cyan, blue
@@ -131,12 +131,12 @@ def _recognize(setup, data, name) -> List[SimSetup]:
     return r
 
 
-def _proc_run(s: SimSetup, data, start, stop, broker, spreads):
+def _proc_run(s: SimSetup, data, start, stop, broker, spreads, progress=None):
     """
     TODO: need to be running in separate process
     """
-    b = z_backtest(s.get_signals(data, start, stop), data, broker, spread=spreads,
-                   name=s.name, execution_logger=True, trackers=s.trackers, )
+    b = z_backtest(s.get_signals(data, start, stop), data, broker,
+                   spread=spreads, name=s.name, execution_logger=True, trackers=s.trackers, progress=progress)
     return b
 
 
@@ -221,17 +221,48 @@ class MultiResults:
         return df.reset_index()
 
 
+class __ForeallProgress:
+    def __init__(self, n_sims, descr='backtest'):
+        if runtime_env() == 'notebook':
+            from tqdm.notebook import tqdm
+        else:
+            from tqdm import tqdm
+
+        self.p = tqdm(total=100 * n_sims, unit_divisor=1, unit_scale=1, unit=' quotes', desc=descr)
+        self.sim = 0
+        self.i_in_sim = 0
+
+    def set_descr(self, descr):
+        self.p.desc = descr
+        
+    def close(self):
+        self.p.update(self.p.total - self.p.n)
+        self.p.close()
+
+    def __call__(self, i, label=None):
+        if i < self.i_in_sim and i < 10:
+            self.sim += 1
+
+        d = self.sim * 100 + i - self.p.n
+        if d > 0:
+            self.p.update(d)
+            
+        self.i_in_sim = i
+
+
 def simulation(setup, data, broker='', project='', start=None, stop=None, spreads=0, multiproc=False):
     """
     Simulate different cases
     """
     sims = _recognize(setup, data, project)
     results = []
+    progress = __ForeallProgress(len(sims))
 
     for i, s in enumerate(sims):
         # print(s)
         if True:
-            b = _proc_run(s, data, start, stop, broker, spreads)
+            progress.set_descr(f'{project}/{s.name}')
+            b = _proc_run(s, data, start, stop, broker, spreads, progress)
             results.append(b)
-
+    progress.close()
     return MultiResults(results=results, project=project, broker=broker, start=start, stop=stop)
