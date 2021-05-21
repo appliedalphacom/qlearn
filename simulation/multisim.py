@@ -261,7 +261,7 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
     for i, s in enumerate(sims):
         # print(s)
         if True:
-            progress.set_descr(str(s))
+            progress.set_descr(s.name)
             b = _proc_run(s, data, start, stop, broker, spreads, progress)
             results.append(b)
 
