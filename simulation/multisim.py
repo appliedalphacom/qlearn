@@ -90,7 +90,7 @@ class SimSetup:
         return sx[_z] if _z is not None else sx
 
     def __repr__(self):
-        return f'{self.name} : {self.signal_type} | {repr(self.trackers) if self.trackers is not None else "<no tracker>"}'
+        return f'{self.name}.{self.signal_type}.[{repr(self.trackers) if self.trackers is not None else "-"}]'
 
 
 def _is_signal_or_generator(obj):
@@ -228,7 +228,7 @@ class __ForeallProgress:
         else:
             from tqdm import tqdm
 
-        self.p = tqdm(total=100 * n_sims, unit_divisor=1, unit_scale=1, unit=' quotes', desc=descr)
+        self.p = tqdm(total=100 * n_sims, unit_divisor=1, unit_scale=1, unit=' signals', desc=descr)
         self.sim = 0
         self.i_in_sim = 0
 
@@ -261,8 +261,10 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
     for i, s in enumerate(sims):
         # print(s)
         if True:
-            progress.set_descr(f'{project}/{s.name}')
+            progress.set_descr(str(s))
             b = _proc_run(s, data, start, stop, broker, spreads, progress)
             results.append(b)
+
+    progress.set_descr(f'Backtest {project}')
     progress.close()
     return MultiResults(results=results, project=project, broker=broker, start=start, stop=stop)
