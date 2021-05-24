@@ -34,6 +34,12 @@ def _type(obj) -> _Types:
         t = _Types.SIGNAL
     elif isinstance(obj, (Pipeline, BaseEstimator)):
         t = _Types.ESTIMATOR
+    elif isinstance(obj, dict):
+        # when tracker has setup for each intrument {str -> Tracker}
+        if all([isinstance(k, str) & isinstance(v, Tracker) for k, v in obj.items()]):
+            t = _Types.TRACKER
+        else:
+            t = _Types.UKNOWN
     else:
         t = _Types.UKNOWN
     return t
