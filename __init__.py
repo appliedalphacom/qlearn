@@ -8,6 +8,11 @@ from qlearn.tracking.trackers import (
     TimeExpirationTracker, TurtleTracker, ProgressionTracker, ATRTracker
 )
 
+# trailings
+from qlearn.tracking.trailings import (
+    Pyramiding, RADChandelier
+)
+
 # some helpers
 from qlearn.core.utils import ls_params, debug_output, permutate_params
 from qlearn.core.generators import crossup, crossdown
