@@ -256,3 +256,21 @@ def backward_timeseries(x: pd.Series, period):
     # drop first points
     f_x[:f_x.index[0] + period] = np.nan
     return f_x
+
+
+def put_under(section, x):
+    """
+    Put series under 'section' (higher level of multi index)
+
+    put_under('MySect', pd.Series([1,2,3,4], name='xx'))
+
+       MySect
+           xx
+    0       1
+    1       2
+    2       3
+    3       4
+    """
+    s_name = x.name
+    x = x.rename(section).to_frame() if isinstance(x, pd.Series) else x
+    return pd.concat([x], axis=1, keys=[s_name]).swaplevel(0, 1, 1)
