@@ -294,3 +294,8 @@ class PortfolioComposer(MarketDataComposer):
 
     def __init__(self, predictor, column='close', debug=False):
         super().__init__(predictor, PortfolioPicker(), column, debug)
+
+    def select(self, rules):
+        self.selector.rules = rules
+        return self
+

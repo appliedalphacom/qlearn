@@ -78,16 +78,17 @@ class AbstractDataPicker(Resampler):
     def iterate(self, data):
         info = detect_data_type(data)
 
-        seen = set()
-        seen_add = seen.add
+        selected = info.symbols
+        if self.rules:
+            seen = set()
+            seen_add = seen.add
+            # selected = [s for s in info.symbols if self._is_selected(s, self.rules)]
 
-        # selected = [s for s in info.symbols if self._is_selected(s, self.rules)]
+            # check rules and select passed symbols
+            selected_seq = [s for r in self.rules for s in info.symbols if self._is_selected(s, [r])]
 
-        # chck rules and select passed symbols
-        selected_seq = [s for r in self.rules for s in info.symbols if self._is_selected(s, [r])]
-
-        # make list of selection in order of rules been passed
-        selected = [x for x in selected_seq if not (x in seen or seen_add(x))]
+            # make list of selection in order of rules been passed
+            selected = [x for x in selected_seq if not (x in seen or seen_add(x))]
 
         return self.iterdata(data, selected, info.type, info.symbols, info.subtypes)
 
