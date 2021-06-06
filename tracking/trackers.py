@@ -126,8 +126,8 @@ class FixedPctTrader(TakeStopTracker):
     def __init__(self, size, take, stop, debug=False):
         super().__init__(debug)
         self.position_size = size
-        self.fixed_take = take
-        self.fixed_stop = stop
+        self.fixed_take = abs(take)
+        self.fixed_stop = abs(stop)
 
     def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
         if signal_qty > 0:
