@@ -115,6 +115,37 @@ class FixedTrader(TakeStopTracker):
 
         # call super method
         return signal_qty * self.position_size
+    
+
+class FixedPctTrader(TakeStopTracker):
+    """
+    Fixed trader tracker (take and stop as percentage from entry price):
+     fixed position size, fixed stop and take
+    """
+
+    def __init__(self, size, take, stop, debug=False):
+        super().__init__(debug)
+        self.position_size = size
+        self.fixed_take = take
+        self.fixed_stop = stop
+
+    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+        if signal_qty > 0:
+            if self.fixed_stop > 0:
+                self.stop_at(signal_time, ask * (1 - self.fixed_stop))
+
+            if self.fixed_take > 0:
+                self.take_at(signal_time, ask * (1 + self.fixed_take))
+
+        elif signal_qty < 0:
+            if self.fixed_stop > 0:
+                self.stop_at(signal_time, bid * (1 + self.fixed_stop))
+
+            if self.fixed_take > 0:
+                self.take_at(signal_time, bid * (1 - self.fixed_take))
+
+        # call super method
+        return signal_qty * self.position_size
 
 
 class TimeExpirationTracker(Tracker):
