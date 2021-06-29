@@ -27,6 +27,12 @@ class ForwardReturnsCalculator:
             raise Exception(f"Can't exctract market info data from {estimator}")
         return mi
 
+    def _cleanup_data(self, series, keep='last'):
+        """
+        Remove duplicated indexes
+        """
+        return series[~series.index.duplicated(keep=keep)]
+
     def get_prices(self, x, market_info: MarketInfo):
         dt = detect_data_type(x)
         s0, s1 = (market_info.session_start, market_info.session_end) if market_info is not None else (None, None)
@@ -55,6 +61,9 @@ class ForwardDirectionScoring(ForwardReturnsCalculator):
         dp = forward_prices - prices
         if self.min_threshold > 0:
             dp = dp.where(abs(dp) >= self.min_threshold, 0)
+
+        # drop duplicated signals to avoid unnecessary collisions
+        signals = self._cleanup_data(signals, 'last')
 
         # drop nan's
         dp[np.isnan(dp)] = 0
@@ -96,12 +105,21 @@ class ForwardReturnsSharpeScoring(ForwardReturnsCalculator):
         self.debug = debug
 
     def _returns_with_commissions_crypto_aware(self, prices, f_prices, signals):
+        # drop duplicated signals to avoid unnecessary collisions
+        signals = self._cleanup_data(signals, 'last')
+
         if self.crypto_futures:
             # pnl on crypto is calculated as following
-            dp = 1 / prices - 1 / f_prices
+
+            # in BTC
+            # dp = 1 / prices - 1 / f_prices
+
+            # in USD
+            dp = f_prices / prices - 1
 
             # commissions are dependent on prices
-            dpc = scols(dp, self.commissions * 1 / f_prices, names=['D', 'C'])
+            # dpc = scols(dp, self.commissions * 1 / f_prices, names=['D', 'C'])
+            dpc = scols(dp, self.commissions * abs(signals), names=['D', 'C'])
         else:
             dp = f_prices - prices
 
@@ -109,7 +127,7 @@ class ForwardReturnsSharpeScoring(ForwardReturnsCalculator):
             dpc = scols(dp, pd.Series(self.commissions, dp.index), names=['D', 'C'])
 
         # drop duplicated indexes if exist (may happened on tick data)
-        dpc = dpc[~dpc.index.duplicated(keep='first')]
+        dpc = self._cleanup_data(dpc, 'first')
         rpc = dpc.reindex(signals.index).dropna()
 
         yc = scols(rpc, signals.rename('pred')).dropna()
