@@ -175,7 +175,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
                              f"market now is {self.last_quote}")
 
         if (is_buy and (stop >= price or take <= price)) or (quantity < 0 and (stop <= price or take >= price)):
-            raise ValueError(f"Wrong stop/take limits ({stop}/{take}) for stop order at {price}")
+            raise ValueError(f"Wrong stop/take ({stop}/{take}) for {'buy' if is_buy else 'sell'} stop order at {price}")
 
         to = TriggerOrder(price, quantity, stop, take, comment, user_data)
         self.orders.append(to)
