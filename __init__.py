@@ -1,11 +1,15 @@
-from qlearn.core.base import MarketDataComposer, SingleInstrumentComposer, PortfolioComposer, signal_generator
+from qlearn.core.base import (
+    BaseEstimator, MarketDataComposer, SingleInstrumentComposer, PortfolioComposer, signal_generator
+)
 from qlearn.core.pickers import SingleInstrumentPicker, PortfolioPicker
 from qlearn.core.metrics import ForwardDirectionScoring, ForwardReturnsSharpeScoring, ReverseSignalsSharpeScoring
 
 from qlearn.core.operations import Imply, And, Or, Neg
+
+# basic trackers
 from qlearn.tracking.trackers import (
     Tracker, FixedTrader, FixedPctTrader, DispatchTracker, PipelineTracker, TakeStopTracker,
-    TimeExpirationTracker, TurtleTracker, ProgressionTracker, ATRTracker
+    TimeExpirationTracker, TurtleTracker, ProgressionTracker, ATRTracker, TriggeredOrdersTracker
 )
 
 # trailings
