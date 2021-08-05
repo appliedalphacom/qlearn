@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Any
 
 import numpy as np
 import pandas as pd
@@ -99,12 +99,13 @@ class TakeStopTracker(Tracker):
 
 @dataclass
 class TriggerOrder:
-    price: float         # trigger price
-    quantity: int        # position to open
-    stop: float          # stop level (if None not used)
-    take: float          # take level (if None not used)
-    comment: str = ''    # user comment
-    fired: bool = False  # true if order was triggered
+    price: float          # trigger price
+    quantity: int         # position to open
+    stop: float           # stop level (if None not used)
+    take: float           # take level (if None not used)
+    comment: str = ''     # user comment
+    user_data: Any = None # any user data
+    fired: bool = False   # true if order was triggered
 
     def __str__(self):
         return f"[{'FIRED' if self.fired else 'ACTIVE'}] TriggerOrder for {'buy' if self.quantity > 0 else 'sell'} " \
@@ -150,6 +151,8 @@ class TriggeredOrdersTracker(TakeStopTracker):
                     self.stop_at(quote_time, o.stop)
                     self.take_at(quote_time, o.take)
                     self.fired.append(o)
+                    # call callback on trigger fire
+                    self.on_trigger_fired(quote_time, o)
                 else:
                     n_orders.append(o)
             self.orders = n_orders
@@ -158,11 +161,14 @@ class TriggeredOrdersTracker(TakeStopTracker):
         q.time, q.bid, q.ask, q.bid_ask, q.ask_size = quote_time, bid, ask, bid_size, ask_size
         super().update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
 
+    def on_trigger_fired(self, timestamp, order: TriggerOrder):
+        pass
+
     def cancel(self, order: TriggerOrder):
         if order in self.orders:
             self.orders.remove(order)
 
-    def stop_order(self, price, quantity, stop=None, take=None, comment=''):
+    def stop_order(self, price, quantity, stop=None, take=None, comment='', user_data=None):
         is_buy = quantity > 0
         if is_buy and price < self.last_quote.ask:
             raise ValueError(f"Can't send {'buy' if is_buy else 'sell'} stop order at price {price}"
@@ -171,7 +177,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
         if (is_buy and (stop >= price or take <= price)) or (quantity < 0 and (stop <= price or take >= price)):
             raise ValueError(f"Wrong stop/take limits ({stop}/{take}) for stop order at {price}")
 
-        to = TriggerOrder(price, quantity, stop, take, comment)
+        to = TriggerOrder(price, quantity, stop, take, comment, user_data)
         self.orders.append(to)
         return to
 

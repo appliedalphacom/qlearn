@@ -1,13 +1,15 @@
 import unittest
 
 import pandas as pd
+
+from ira.utils.utils import mstruct
+
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_columns', 500)
 
-
 from ira.utils.nb_functions import z_backtest
 from qlearn.tracking.trackers import (TakeStopTracker, DispatchTracker, PipelineTracker, Tracker, TimeExpirationTracker,
-                                      TriggeredOrdersTracker)
+                                      TriggeredOrdersTracker, TriggerOrder)
 
 
 def _read_csv_ohlc(symbol):
@@ -98,28 +100,37 @@ class Trackers_test(unittest.TestCase):
             list(filter(lambda x: x != '', p.executions.comment.values)))
 
     def test_triggered_orders(self):
+
         class StopOrdersTestTracker(TriggeredOrdersTracker):
             def __init__(self, tick_size):
                 super().__init__(True)
                 self.tick_size = tick_size
                 self.to = None
+                self._fired = 0
 
             def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
                 if signal_qty > 0:
                     entry = ask + 50 * self.tick_size
-                    print(f'ENTRY {entry}')
                     self.to = self.stop_order(
-                        entry, 1000, entry - 25 * self.tick_size, entry + 25 * self.tick_size, comment='My test Order'
+                        entry, 1000, entry - 25 * self.tick_size, entry + 25 * self.tick_size,
+                        comment='My test Order', user_data=mstruct(entry_number=1, test=1)
                     )
                 return None
 
             def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
-                super(StopOrdersTestTracker, self).on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
+                super().on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
 
                 if self.to is not None:
                     if self.to.fired:
                         print(quote_time, self.to)
                         self.to = None
+
+            def on_trigger_fired(self, timestamp, order: TriggerOrder):
+                print(f"\n\t---(FIRED)--> {timestamp} | {order} => {order.user_data} ")
+                self._fired += 1
+
+            def statistics(self):
+                return {'fired': self._fired, **super().statistics()}
 
         data = _read_csv_ohlc('EURUSD')
 
@@ -128,16 +139,19 @@ class Trackers_test(unittest.TestCase):
             '2020-08-17 23:19:59': {'EURUSD': 0},
         })
 
-        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True, trackers=StopOrdersTestTracker(1e-5))
+        track = StopOrdersTestTracker(1e-5)
+        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True, trackers=track)
 
         print(p.executions)
         print(p.trackers_stat)
+
+        self.assertTrue(p.trackers_stat['EURUSD']['fired'] > 0)
 
     def test_take_stop_orders(self):
         data = _read_csv_ohlc('RM1')
         s = _signals({
             '2020-08-17 00:00:01': {'RM1': +1},
-            '2020-08-17 00:22:00': {'RM1':  0},
+            '2020-08-17 00:22:00': {'RM1': 0},
         })
 
         p = z_backtest(s, data, 'forex', spread=0, execution_logger=True,
