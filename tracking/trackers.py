@@ -172,7 +172,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
         is_buy = quantity > 0
         if is_buy and price < self.last_quote.ask:
             raise ValueError(f"Can't send {'buy' if is_buy else 'sell'} stop order at price {price}"
-                             f"market now is {self.last_quote}")
+                             f" market now is {self.last_quote} | {comment}")
 
         if (is_buy and (stop >= price or take <= price)) or (quantity < 0 and (stop <= price or take >= price)):
             raise ValueError(f"Wrong stop/take ({stop}/{take}) for {'buy' if is_buy else 'sell'} stop order at {price}")
