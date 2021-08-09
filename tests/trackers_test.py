@@ -39,30 +39,36 @@ class _Test_StopTakeTracker(TakeStopTracker):
         self.stop_points = stop_points
         self.take_points = take_points
 
+    def on_take(self, timestamp, price, user_data=None):
+        print(f" ----> TAKE: {user_data}")
+
+    def on_stop(self, timestamp, price, user_data=None):
+        print(f" ----> STOP: {user_data}")
+
     def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
         mp = (bid + ask) / 2
         if signal_qty > 0:
             if self.stop_points is not None:
                 self.debug(f' >> STOP LONG at {mp - self.stop_points * self.tick_size}')
-                self.stop_at(signal_time, mp - self.stop_points * self.tick_size)
+                self.stop_at(signal_time, mp - self.stop_points * self.tick_size, "Stop user data long")
 
             if self.take_points is not None:
-                self.take_at(signal_time, mp + self.take_points * self.tick_size)
+                self.take_at(signal_time, mp + self.take_points * self.tick_size, "Take user data long")
 
         elif signal_qty < 0:
             if self.stop_points is not None:
                 self.debug(f' >> STOP SHORT at {mp - self.stop_points * self.tick_size}')
-                self.stop_at(signal_time, mp + self.stop_points * self.tick_size)
+                self.stop_at(signal_time, mp + self.stop_points * self.tick_size, "Stop user data short")
 
             if self.take_points is not None:
-                self.take_at(signal_time, mp - self.take_points * self.tick_size)
+                self.take_at(signal_time, mp - self.take_points * self.tick_size, "Take user data short")
 
         return signal_qty * self.size
 
 
 class Trackers_test(unittest.TestCase):
 
-    def test_dispathcher(self):
+    def test_dispatcher(self):
         data = _read_csv_ohlc('EURUSD')
 
         s = _signals({
@@ -91,13 +97,15 @@ class Trackers_test(unittest.TestCase):
 
         print(p.executions)
         print(p.trackers_stat)
+        execs_log = list(filter(lambda x: x != '', p.executions.comment.values))
+        print(execs_log)
 
         self.assertListEqual(
             ['stop long at 1.18445',
              'stop short at 1.1879499999999998',
              '<regime:mr> activated and flat position',
              'TimeExpirationTracker:: position 777 is expired'],
-            list(filter(lambda x: x != '', p.executions.comment.values)))
+            execs_log)
 
     def test_triggered_orders(self):
 
