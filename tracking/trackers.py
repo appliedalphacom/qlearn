@@ -144,8 +144,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
 
     def trade(self, trade_time, quantity, comment='', exact_price=None):
         if quantity == 0:
-            self.stop = None
-            self.take = None
+            self._cleanup()
 
         pnl = 0
         if np.isfinite(quantity):
@@ -168,8 +167,8 @@ class TriggeredOrdersTracker(TakeStopTracker):
                 if (o.quantity > 0 and q.ask < o.price <= ask) or (o.quantity < 0 and q.bid > o.price >= bid):
                     o.fired = True
                     self.trade(quote_time, o.quantity, comment=o.comment, exact_price=o.price)
-                    self.stop_at(quote_time, o.stop)
-                    self.take_at(quote_time, o.take)
+                    self.stop_at(quote_time, o.stop, o.user_data)
+                    self.take_at(quote_time, o.take, o.user_data)
                     self.fired.append(o)
                     # call callback on trigger fire
                     self.on_trigger_fired(quote_time, o)
