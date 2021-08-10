@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Union
+from typing import List, Union, Dict
 from dataclasses import dataclass
 
 import numpy as np
@@ -45,7 +45,7 @@ def _type(obj) -> _Types:
     return t
 
 
-def start_stop_sigs(data, start=None, stop=None):
+def start_stop_sigs(data: Dict[str, pd.DataFrame], start=None, stop=None):
     """
     Generate stub signals (NaNs mainly for backtester progress)
     """
@@ -57,21 +57,25 @@ def start_stop_sigs(data, start=None, stop=None):
         except:
             pass
 
-    ss = {}
     for i, d in data.items():
         start = d.index[0] if start is None else start
         stop = d.index[-1] if stop is None else stop
 
-        dx = len(d[start:stop]) // 100
-        idx = d.index
+        d_sel = d[start:stop]
+        if d_sel.empty:
+            raise ValueError(f">>> There is no historical '{i}' data for period {start} : {stop} !")
+
+        dx = max(len(d_sel) // 100, 1)
+        idx = d_sel.index
 
         # split into 100 parts
+        ss = {}
         for j in range(0, 101):
             ss[idx[j * dx]] = np.nan
 
         # ss[idx[-1]] = np.nan
         r = pd.concat((r, pd.Series(ss, name=i)), axis=1)
-        return r
+    return r
 
 
 class SimSetup:
