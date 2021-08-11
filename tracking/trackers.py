@@ -24,6 +24,9 @@ class TakeStopTracker(Tracker):
         self.n_takes = 0
         self.times_to_take = []
         self.times_to_stop = []
+        # if set to true it will execute stops exactly at set level otherwise at current quote
+        # second case may introduce additional costs if being tested on OHLC bars
+        self.accurate_stops = False
         # what is last triggered event: 'stop' or 'take' (None if nothing was triggered yet)
         self.last_triggered_event = None
         if debug:
@@ -70,7 +73,6 @@ class TakeStopTracker(Tracker):
         if is_take:
             self.debug(f' -> [{timestamp}] take {pos_dir} [{self._instrument}] at {exec_price:.5f}')
             self.times_to_take.append(timestamp - self._service.last_trade_time)
-            # self.trade(timestamp, 0, f'take long at {exec_price}', exact_price=exec_price)
             super().trade(timestamp, 0, f'take {pos_dir} at {exec_price}', exact_price=exec_price)
             self.n_takes += 1
             self.last_triggered_event = 'take'
@@ -78,7 +80,6 @@ class TakeStopTracker(Tracker):
         else:
             self.debug(f' -> [{timestamp}] stop {pos_dir} [{self._instrument}] at {exec_price:.5f}')
             self.times_to_stop.append(timestamp - self._service.last_trade_time)
-            # self.trade(timestamp, 0, f'stop long at {exec_price}', exact_price=exec_price)
             super().trade(timestamp, 0, f'stop {pos_dir} at {exec_price}', exact_price=exec_price)
             self.n_stops += 1
             self.last_triggered_event = 'stop'
@@ -95,14 +96,14 @@ class TakeStopTracker(Tracker):
                 self.__exec_risk_management(quote_time, self.take, is_take=True, is_long=True)
 
             if self.stop and ask <= self.stop:
-                self.__exec_risk_management(quote_time, ask, is_take=False, is_long=True)
+                self.__exec_risk_management(quote_time, self.stop if self.accurate_stops else ask, is_take=False, is_long=True)
 
         if self._position.quantity < 0:
             if self.take and ask <= self.take:
                 self.__exec_risk_management(quote_time, self.take, is_take=True, is_long=False)
 
             if self.stop and bid >= self.stop:
-                self.__exec_risk_management(quote_time, bid, is_take=False, is_long=False)
+                self.__exec_risk_management(quote_time, self.stop if self.accurate_stops else bid, is_take=False, is_long=False)
 
         # call super method
         super().update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
@@ -136,11 +137,17 @@ class TriggeredOrdersTracker(TakeStopTracker):
     Buy/Sell Stop trigger orders tracker implementation
     """
 
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, accurate_stop_execution=True):
+        """
+        :param accurate_stop_execution: if true it will emulates execution at exact stop level
+        """
         super().__init__(debug)
         self.last_quote = Quote(np.nan, np.nan, np.nan, np.nan, np.nan)
         self.orders: List[TriggerOrder] = list()
         self.fired: List[TriggerOrder] = list()
+        self.accurate_stops = accurate_stop_execution
+        if accurate_stop_execution: 
+            self.debug(f' > TriggeredOrdersTracker accurate_stops parameter is set')
 
     def trade(self, trade_time, quantity, comment='', exact_price=None):
         if quantity == 0:
