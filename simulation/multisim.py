@@ -1,18 +1,19 @@
+from datetime import datetime
 from enum import Enum
 from typing import List, Union, Dict
-from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from dataclasses import dataclass
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
 
 from ira.simulator.SignalTester import Tracker, SimulationResult
 from ira.utils.nb_functions import z_backtest
+from ira.utils.ui_utils import red, green, yellow, blue
 from ira.utils.utils import mstruct, runtime_env
 from qlearn import MarketDataComposer
-
-from ira.utils.ui_utils import red, green, yellow, cyan, blue
+from simulation.multiproc import Task, RunningInfoManager
 
 
 class _Types(Enum):
@@ -244,7 +245,7 @@ class __ForeallProgress:
 
     def set_descr(self, descr):
         self.p.desc = descr
-        
+
     def close(self):
         self.p.update(self.p.total - self.p.n)
         self.p.close()
@@ -256,7 +257,7 @@ class __ForeallProgress:
         d = self.sim * 100 + i - self.p.n
         if d > 0:
             self.p.update(d)
-            
+
         self.i_in_sim = i
 
 
@@ -278,3 +279,63 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
     progress.set_descr(f'Backtest {project}')
     progress.close()
     return MultiResults(results=results, project=project, broker=broker, start=start, stop=stop)
+
+
+class _InfoProgress:
+    def __init__(self, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
+        self.run_name = run_name
+        self.run_id = run_id
+        self.t_id = t_id
+        self.task_name = task_name
+        self.ri = ri
+        self._prev_i = 0
+
+    def __call__(self, i, label=None):
+        if i > self._prev_i:
+            self.ri.update_task_info(self.run_id, self.t_id, {
+                'task': self.task_name, 'id': self.t_id, 'update_time': str(datetime.now()), 'progress': i
+            })
+            self._prev_i = i
+
+
+class _SimulationRun(Task):
+    """
+    Task for simulations run
+    """
+
+    def __init__(self, instrument, market_description, ctor, **args):
+        super().__init__(ctor, **args)
+        self.instrument = instrument
+        self.broker = market_description.broker
+        self.start = market_description.start
+        self.stop = market_description.stop
+        self.spreads = market_description.spreads
+        self.loader = market_description.loader
+
+    def run(self, task_obj, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
+        # TODO: very stupid raw implementation here - need to do it better !!!!
+        data = self.loader(self.instrument).ticks()
+
+        s = _recognize({f"{task_name}.{t_id}": task_obj}, data, run_name)[0]
+        sim_result = z_backtest(s.get_signals(data, self.start, self.stop), data, self.broker,
+                                spread=self.spreads, name=s.name, execution_logger=True, trackers=s.trackers,
+                                progress=_InfoProgress(run_name, run_id, t_id, task_name, ri))
+        return sim_result
+
+
+class Market:
+    """
+    Generic market descriptor
+    """
+
+    def __init__(self, broker, start, stop, spreads, data_loader):
+        self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
+
+    def new_simulation(self, instrument, task, **args):
+        return _SimulationRun(instrument, self.market_description, task, **args)
+
+    def simulations_for(self, instrument, task, list_of_permutations, simulation_id_start=0):
+        return {
+            f'sim.{k}.{instrument}': self.new_simulation(instrument, task, **p) for k, p in
+            enumerate(list_of_permutations, simulation_id_start)
+        }
