@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Callable
 
 import numpy as np
 import pandas as pd
@@ -286,6 +286,7 @@ class _InfoProgress:
     Progress bar implementation for simulations running in multiproc
     It just updates progress of simulation in memcached
     """
+
     def __init__(self, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
         self.run_name = run_name
         self.run_id = run_id
@@ -302,6 +303,23 @@ class _InfoProgress:
             self._prev_i = i
 
 
+class IMarketDataProvider:
+    """
+    Some generic interface for providing access to historical data
+
+    # TODO: Temp loader hack !!
+    """
+
+    def ticks(self):
+        raise ValueError("Method 'ticks()' must be implemented !!!")
+
+    def ohlc(self, timeframe, **kwargs):
+        raise ValueError("Method 'ohlc(timeframe)' must be implemented !!!")
+
+    def __getitem__(self, idx):
+        raise ValueError("Method '__getitem__(idx)' must be implemented !!!")
+
+
 class _SimulationTrackerTask(Task):
     """
     Task for simulations run (tracker only)
@@ -315,11 +333,13 @@ class _SimulationTrackerTask(Task):
         self.start = market_description.start
         self.stop = market_description.stop
         self.spreads = market_description.spreads
-        self.loader = market_description.loader
+
+        # TODO: Temp loader hack !!
+        self.loader: Callable[[str, str, str], IMarketDataProvider] = market_description.loader
 
     def run(self, task_obj, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
-        # TODO: very stupid raw implementation here - need to do it better !!!!
-        data = self.loader(self.instrument).ticks()
+        # TODO: Temp loader hack: very stupid raw implementation here - need to re-do it better !!!!
+        data = self.loader(self.instrument, self.start, self.stop).ticks()
 
         s = _recognize({f"{task_name}.{t_id}": task_obj}, data, run_name)[0]
         sim_result = z_backtest(s.get_signals(data, self.start, self.stop), data, self.broker,
@@ -328,27 +348,12 @@ class _SimulationTrackerTask(Task):
         return sim_result
 
 
-class IMarketDataProvider:
-    """
-    Some generic interface for providing access to historical data
-    """
-
-    def ticks(self):
-        raise ValueError("Method 'ticks()' must be implemented !!!")
-
-    def ohlc(self, timeframe, **kwargs):
-        raise ValueError("Method 'ohlc(timeframe)' must be implemented !!!")
-
-    def __getitem__(self, idx):
-        raise ValueError("Method '__getitem__(idx)' must be implemented !!!")
-    
-
 class Market:
     """
     Generic market descriptor
     """
 
-    def __init__(self, broker, start, stop, spreads, data_loader: IMarketDataProvider):
+    def __init__(self, broker, start, stop, spreads, data_loader: Callable[[str, str, str], IMarketDataProvider]):
         self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
 
     def new_simulation(self, instrument, task, **args):

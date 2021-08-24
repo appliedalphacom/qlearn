@@ -8,7 +8,7 @@ import multiprocessing as mp
 from datetime import datetime
 from multiprocessing import Manager
 from time import gmtime, strftime, sleep, monotonic, perf_counter
-from typing import Union, Dict, List
+from typing import Union, Dict, List, Tuple
 
 import numpy as np
 
@@ -158,27 +158,30 @@ def __run_task(args):
     return task._run(run_name, run_id, t_id, task_name, ri)
 
 
-def __wait_all_tasks(name, run_id, results_iterator, total, rinf: RunningInfoManager, ui_progress, poll_timeout=0.5):
+def __wait_all_tasks(name, run_id, results_iterator, total,
+                     rinf: RunningInfoManager, ui_progress, poll_timeout=0.5) -> List:
     completed, failed = 0, 0
     started_time = datetime.now()
 
     def elapsed_seconds():
         return (datetime.now() - started_time).total_seconds()
 
-    def info_(result):
+    def info_(res):
         elapsed_time = strftime("%Hh %Mm %Ssec", gmtime(elapsed_seconds()))
         infrm = ''
-        if result:
-            infrm = f" Execution time: {result.execution_time} s Task: <font color='#40ff30'>{result.task}</font>"
+        if res:
+            infrm = f" Execution time: {res.execution_time} s Task: <font color='#40ff30'>{res.task}</font>"
 
         infrm += f" Elapsed time: {elapsed_time}" \
                  f" Completed {completed} from {total} <font color='#ff0505'> | Failed: {failed}</font>"
 
-        if result is not None and result.error:
-            infrm += f" | Error in <font color='#40ff30'>{result.task}</font> [{result.task_id}]: <font color='#ff0505'>{result.error}</font>"
+        if res is not None and res.error:
+            infrm += f" | Error in <font color='#40ff30'>{res.task}</font> [{res.task_id}]: <font color='#ff0505'>{res.error}</font>"
 
         return infrm
 
+    # here we will gather all results
+    results = []
     for result in results_iterator:
         if result is not None:  # new result is ready
             completed += 1
@@ -192,6 +195,7 @@ def __wait_all_tasks(name, run_id, results_iterator, total, rinf: RunningInfoMan
             # update active run status
             rinf.update_id_info(run_id, {'name': name, 'progress': completed, 'total': total, 'failed': failed,
                                          'elapsed': elapsed_seconds()})
+            results.append(result)
 
         # small timeout before next iteration
         sleep(poll_timeout)
@@ -201,15 +205,20 @@ def __wait_all_tasks(name, run_id, results_iterator, total, rinf: RunningInfoMan
         ui_progress.progress.style.bar_color = 'green'
         ui_progress.info.value = info_(None)
 
+    return results
+
 
 def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_per_proc=10, cleanup=False,
-              superseded_run_id=None, task_id_start=0):
+              superseded_run_id=None, task_id_start=0) -> Tuple[str, List]:
     """
     Run tasks in parallel processes
+    
+    :return: run_id, list of results
     """
     n_cpu, n_tasks = max(min(mp.cpu_count(), max_cpus), 1), len(tasks)
     run_id = generate_id(name) if superseded_run_id is None else superseded_run_id
     ui_progress = ui_progress_bar(f"{name} [{run_id}]")
+    results = []
 
     # turn into dict if need
     if isinstance(tasks, List):
@@ -236,12 +245,12 @@ def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_pe
             # ui for jupyter
             from IPython.display import display
             display(ui_progress.panel)
-            __wait_all_tasks(name, run_id, results_iterator, n_tasks, rinf, ui_progress)
+            results = __wait_all_tasks(name, run_id, results_iterator, n_tasks, rinf, ui_progress)
         else:
             # progress in console
             from tqdm import tqdm
-            __wait_all_tasks(name, run_id, tqdm(results_iterator, desc=str(name), total=n_tasks), n_tasks, rinf,
-                             ui_progress)
+            results = __wait_all_tasks(name, run_id, tqdm(results_iterator, desc=str(name), total=n_tasks), n_tasks,
+                                       rinf, ui_progress)
 
         # remove from active list if needed
         if cleanup:
@@ -249,6 +258,8 @@ def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_pe
 
         # close run info manager
         rinf.close()
+
+    return run_id, results
 
 
 def list_running_tasks(cleanup=False):
