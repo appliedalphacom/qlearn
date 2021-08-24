@@ -4,7 +4,7 @@ from time import monotonic
 
 import numpy as np
 
-from qlearn.simulation.multiproc import Task, RunningInfoManager, run_tasks, list_running_tasks
+from qlearn.simulation.multiproc import Task, RunningInfoManager, run_tasks, ls_running_tasks
 
 
 class TestCalcTask(Task):
@@ -39,7 +39,7 @@ class MultiProcTest(unittest.TestCase):
                                 }, max_cpus=1)
 
         # just debug
-        list_running_tasks()
+        ls_running_tasks()
 
         ri = RunningInfoManager()
 

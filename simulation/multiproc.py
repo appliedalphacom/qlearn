@@ -262,7 +262,10 @@ def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_pe
     return run_id, results
 
 
-def list_running_tasks(cleanup=False):
+def ls_running_tasks(cleanup=False):
+    """
+    List all running tasks (processes)
+    """
     rinf = RunningInfoManager()
     runs = rinf.list_runs()
     for r in runs:
