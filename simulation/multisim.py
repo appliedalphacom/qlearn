@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Union, Dict, Protocol
+from typing import List, Union, Dict
 
 import numpy as np
 import pandas as pd
@@ -325,7 +325,7 @@ class IMarketDataProvider:
         raise ValueError("Method '__getitem__(idx)' must be implemented !!!")
 
 
-class LoaderCallable(Protocol):
+class _LoaderCallable:
     """
     # TODO: Temp loader hack !!
     """
@@ -349,7 +349,7 @@ class _SimulationTrackerTask(Task):
         self.spreads = market_description.spreads
 
         # TODO: Temp loader hack !!
-        self.loader: LoaderCallable = market_description.loader
+        self.loader: _LoaderCallable = market_description.loader
 
     def run(self, task_obj, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
         # TODO: Temp loader hack: very stupid raw implementation here - need to re-do it better !!!!
@@ -367,7 +367,7 @@ class Market:
     Generic market descriptor
     """
 
-    def __init__(self, broker, start, stop, spreads, data_loader: LoaderCallable):
+    def __init__(self, broker, start, stop, spreads, data_loader: _LoaderCallable):
         self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
 
     def new_simulation(self, instrument, task, *args, **kwargs):
