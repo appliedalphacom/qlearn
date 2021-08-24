@@ -118,7 +118,7 @@ class Task:
         """
         pass
 
-    def _run(self, run_name: str, run_id: str, t_id: str, task_name: str, ri: RunningInfoManager):
+    def _run(self, run_name: str, run_id: str, t_id: str, task_name: str, ri: RunningInfoManager) -> mstruct:
         started_time = datetime.now()
         err = None
         result = None
@@ -147,7 +147,7 @@ class Task:
         return result_to_return
 
 
-def __run_task(args):
+def __run_task(args) -> mstruct:
     run_name, run_id, t_id, task_name, task, lock = copy.copy(args)
 
     # adding new task in guarded section

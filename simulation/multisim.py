@@ -326,8 +326,8 @@ class _SimulationTrackerTask(Task):
     TODO: signal generator
     """
 
-    def __init__(self, instrument, market_description, tracker_class, **tracker_args):
-        super().__init__(tracker_class, **tracker_args)
+    def __init__(self, instrument, market_description, tracker_class, *tracker_args, **tracker_kwargs):
+        super().__init__(tracker_class, *tracker_args, **tracker_kwargs)
         self.instrument = instrument
         self.broker = market_description.broker
         self.start = market_description.start
