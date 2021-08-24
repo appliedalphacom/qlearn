@@ -356,11 +356,11 @@ class Market:
     def __init__(self, broker, start, stop, spreads, data_loader: Callable[[str, str, str], IMarketDataProvider]):
         self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
 
-    def new_simulation(self, instrument, task, **args):
-        return _SimulationTrackerTask(instrument, self.market_description, task, **args)
+    def new_simulation(self, instrument, task, *args, **kwargs):
+        return _SimulationTrackerTask(instrument, self.market_description, task, *args, **kwargs)
 
     def new_simulations_set(self, instrument, task, list_of_permutations, simulation_id_start=0):
         return {
-            f'sim.{k}.{instrument}': self.new_simulation(instrument, task, **p) for k, p in
+            f'sim.{k}.{instrument}': self.new_simulation(instrument, task, [], **p) for k, p in
             enumerate(list_of_permutations, simulation_id_start)
         }
