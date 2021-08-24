@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Union, Dict, Callable
+from typing import List, Union, Dict, Protocol
 
 import numpy as np
 import pandas as pd
@@ -281,6 +281,11 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
     return MultiResults(results=results, project=project, broker=broker, start=start, stop=stop)
 
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# New experimental multisim implementation
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 class _InfoProgress:
     """
     Progress bar implementation for simulations running in multiproc
@@ -320,6 +325,15 @@ class IMarketDataProvider:
         raise ValueError("Method '__getitem__(idx)' must be implemented !!!")
 
 
+class LoaderCallable(Protocol):
+    """
+    # TODO: Temp loader hack !!
+    """
+
+    def __call__(self, a: List[str], start: str, end: str, **kwargs) -> IMarketDataProvider:
+        pass
+
+
 class _SimulationTrackerTask(Task):
     """
     Task for simulations run (tracker only)
@@ -335,11 +349,11 @@ class _SimulationTrackerTask(Task):
         self.spreads = market_description.spreads
 
         # TODO: Temp loader hack !!
-        self.loader: Callable[[str, str, str], IMarketDataProvider] = market_description.loader
+        self.loader: LoaderCallable = market_description.loader
 
     def run(self, task_obj, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
         # TODO: Temp loader hack: very stupid raw implementation here - need to re-do it better !!!!
-        data = self.loader(self.instrument, self.start, self.stop).ticks()
+        data = self.loader(self.instrument, start=self.start, end=self.stop).ticks()
 
         s = _recognize({f"{task_name}.{t_id}": task_obj}, data, run_name)[0]
         sim_result = z_backtest(s.get_signals(data, self.start, self.stop), data, self.broker,
@@ -353,7 +367,7 @@ class Market:
     Generic market descriptor
     """
 
-    def __init__(self, broker, start, stop, spreads, data_loader: Callable[[str, str, str], IMarketDataProvider]):
+    def __init__(self, broker, start, stop, spreads, data_loader: LoaderCallable):
         self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
 
     def new_simulation(self, instrument, task, *args, **kwargs):
