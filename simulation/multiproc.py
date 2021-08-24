@@ -98,13 +98,14 @@ class Task:
     Abstract task class
     """
 
-    def __init__(self, ctor, **args):
+    def __init__(self, ctor, *args, **kwargs):
         """
         :param ctor: constructor of class
         :param args: constructor's aruments
         """
         self.ctor = ctor
         self.args = args
+        self.kwargs = kwargs
         self.save_to_storage = True
 
     def save(self, save: bool):
@@ -124,7 +125,7 @@ class Task:
 
         try:
             # create instance
-            obj = self.ctor(**self.args)
+            obj = self.ctor(*self.args, **self.kwargs)
 
             # run task
             result = self.run(obj, run_name, run_id, t_id, task_name, ri)
@@ -135,7 +136,7 @@ class Task:
         result_to_return = mstruct(name=run_name, run_id=run_id, task=task_name, task_id=t_id,
                                    started=started_time, finished=finish_time,
                                    execution_time=finish_time - started_time,
-                                   task_args=self.args,
+                                   task_args=[self.args, self.kwargs],
                                    task_class=self.ctor,
                                    error=err,
                                    result=result)
