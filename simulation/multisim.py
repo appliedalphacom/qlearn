@@ -351,11 +351,11 @@ class _SimulationTrackerTask(Task):
         # TODO: Temp loader hack !!
         self.loader: _LoaderCallable = market_description.loader
 
-    def run(self, task_obj, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
+    def run(self, tracker_instance, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
         # TODO: Temp loader hack: very stupid raw implementation here - need to re-do it better !!!!
         data = self.loader(self.instrument, start=self.start, end=self.stop).ticks()
 
-        s = _recognize({f"{task_name}.{t_id}": task_obj}, data, run_name)[0]
+        s = _recognize({f"{task_name}.{t_id}": tracker_instance}, data, run_name)[0]
         sim_result = z_backtest(s.get_signals(data, self.start, self.stop), data, self.broker,
                                 spread=self.spreads, name=s.name, execution_logger=True, trackers=s.trackers,
                                 progress=_InfoProgress(run_name, run_id, t_id, task_name, ri))
@@ -370,11 +370,11 @@ class Market:
     def __init__(self, broker, start, stop, spreads, data_loader: _LoaderCallable):
         self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
 
-    def new_simulation(self, instrument, task, *args, **kwargs):
-        return _SimulationTrackerTask(instrument, self.market_description, task, *args, **kwargs)
+    def new_simulation(self, instrument, tracker, *tracker_args, **tracker_kwargs):
+        return _SimulationTrackerTask(instrument, self.market_description, tracker, *tracker_args, **tracker_kwargs)
 
-    def new_simulations_set(self, instrument, task, list_of_permutations, simulation_id_start=0):
+    def new_simulations_set(self, instrument, tracker, tracker_args_permutations, simulation_id_start=0):
         return {
-            f'sim.{k}.{instrument}': self.new_simulation(instrument, task, *[], **p) for k, p in
-            enumerate(list_of_permutations, simulation_id_start)
+            f'sim.{k}.{instrument}': self.new_simulation(instrument, tracker, *[], **p) for k, p in
+            enumerate(tracker_args_permutations, simulation_id_start)
         }
