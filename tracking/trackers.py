@@ -1,11 +1,13 @@
 from collections import defaultdict
-from typing import Dict
+from typing import Dict, List, Any
 
 import numpy as np
 import pandas as pd
+from dataclasses import dataclass
 
-from ira.series.Indicators import ATR, MovingMinMax
+from ira.series.Indicators import ATR
 from ira.simulator.SignalTester import Tracker
+from ira.strategies.exec_core_api import Quote
 
 
 class TakeStopTracker(Tracker):
@@ -15,11 +17,16 @@ class TakeStopTracker(Tracker):
 
     def __init__(self, debug=False):
         self.take = None
+        self._take_user_data = None
         self.stop = None
+        self._stop_user_data = None
         self.n_stops = 0
         self.n_takes = 0
         self.times_to_take = []
         self.times_to_stop = []
+        # if set to true it will execute stops exactly at set level otherwise at current quote
+        # second case may introduce additional costs if being tested on OHLC bars
+        self.accurate_stops = False
         # what is last triggered event: 'stop' or 'take' (None if nothing was triggered yet)
         self.last_triggered_event = None
         if debug:
@@ -28,54 +35,78 @@ class TakeStopTracker(Tracker):
     def debug(self, *args, **kwargs):
         pass
 
-    def stop_at(self, trade_time, stop_price: float):
+    def stop_at(self, trade_time, stop_price: float, user_data=None):
         self.stop = stop_price
+        self._stop_user_data = user_data
 
-    def take_at(self, trade_time, take_price: float):
+    def take_at(self, trade_time, take_price: float, user_data=None):
         self.take = take_price
+        self._take_user_data = user_data
 
-    def trade(self, trade_time, quantity, comment=''):
+    def trade(self, trade_time, quantity, comment='', exact_price=None):
         if quantity == 0:
-            self.stop = None
-            self.take = None
+            self._cleanup()
 
         # call super method
-        super().trade(trade_time, quantity, comment)
+        super().trade(trade_time, quantity, comment, exact_price=exact_price)
 
-    def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
+    def on_take(self, timestamp, price, user_data=None):
+        """
+        Default handler on take hit
+        """
+        pass
+
+    def on_stop(self, timestamp, price, user_data=None):
+        """
+        Default handler on stop hit
+        """
+        pass
+
+    def _cleanup(self):
+        self.take = None
+        self.stop = None
+        self._take_user_data = None
+        self._stop_user_data = None
+
+    def __exec_risk_management(self, timestamp, exec_price, is_take, is_long):
+        pos_dir = 'long' if is_long else 'short'
+        if is_take:
+            self.debug(f' -> [{timestamp}] take {pos_dir} [{self._instrument}] at {exec_price:.5f}')
+            self.times_to_take.append(timestamp - self._service.last_trade_time)
+            super().trade(timestamp, 0, f'take {pos_dir} at {exec_price}', exact_price=exec_price)
+            self.n_takes += 1
+            self.last_triggered_event = 'take'
+            self.on_take(timestamp, exec_price, self._take_user_data)
+        else:
+            self.debug(f' -> [{timestamp}] stop {pos_dir} [{self._instrument}] at {exec_price:.5f}')
+            self.times_to_stop.append(timestamp - self._service.last_trade_time)
+            super().trade(timestamp, 0, f'stop {pos_dir} at {exec_price}', exact_price=exec_price)
+            self.n_stops += 1
+            self.last_triggered_event = 'stop'
+            self.on_stop(timestamp, exec_price, self._stop_user_data)
+
+        # here we need to clean up stops/takes because position is closed
+        self._cleanup()
+
+    def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
+        # check active stop/take
+        # self.debug(f' ~~> {self._position.quantity} [{quote_time}] {bid}|{ask}({"S" if is_service_quote else "O"})')
         if self._position.quantity > 0:
             if self.take and bid >= self.take:
-                self.debug(f' -> [{quote_time}] take long [{self._instrument}] at {bid:.5f}')
-                self.times_to_take.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0, f'take long at {bid}')
-                self.n_takes += 1
-                self.last_triggered_event = 'take'
-                return
+                self.__exec_risk_management(quote_time, self.take, is_take=True, is_long=True)
 
             if self.stop and ask <= self.stop:
-                self.debug(f' -> [{quote_time}] stop long [{self._instrument}] at {ask:.5f}')
-                self.times_to_stop.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0, f'stop long at {ask}')
-                self.n_stops += 1
-                self.last_triggered_event = 'stop'
-                return
+                self.__exec_risk_management(quote_time, self.stop if self.accurate_stops else ask, is_take=False, is_long=True)
 
         if self._position.quantity < 0:
             if self.take and ask <= self.take:
-                self.debug(f' -> [{quote_time}] take short [{self._instrument}] at {ask:.5f}')
-                self.times_to_take.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0, f'take short at {ask}')
-                self.n_takes += 1
-                self.last_triggered_event = 'take'
-                return
+                self.__exec_risk_management(quote_time, self.take, is_take=True, is_long=False)
 
             if self.stop and bid >= self.stop:
-                self.debug(f' -> [{quote_time}] stop short [{self._instrument}] at {bid:.5f}')
-                self.times_to_stop.append(quote_time - self._service.last_trade_time)
-                self.trade(quote_time, 0, f'stop short at {bid}')
-                self.n_stops += 1
-                self.last_triggered_event = 'stop'
-                return
+                self.__exec_risk_management(quote_time, self.stop if self.accurate_stops else bid, is_take=False, is_long=False)
+
+        # call super method
+        super().update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
 
     def statistics(self) -> Dict:
         return {
@@ -84,6 +115,100 @@ class TakeStopTracker(Tracker):
             'average_time_to_take': np.mean(self.times_to_take) if self.times_to_take else np.nan,
             'average_time_to_stop': np.mean(self.times_to_stop) if self.times_to_stop else np.nan,
         }
+
+
+@dataclass
+class TriggerOrder:
+    price: float  # trigger price
+    quantity: int  # position to open
+    stop: float  # stop level (if None not used)
+    take: float  # take level (if None not used)
+    comment: str = ''  # user comment
+    user_data: Any = None  # any user data
+    fired: bool = False  # true if order was triggered
+
+    def __str__(self):
+        return f"[{'FIRED' if self.fired else 'ACTIVE'}] TriggerOrder for {'buy' if self.quantity > 0 else 'sell'} " \
+               f"of {self.quantity} @ {self.price} (T|S: {self.take} | {self.stop})"
+
+
+class TriggeredOrdersTracker(TakeStopTracker):
+    """
+    Buy/Sell Stop trigger orders tracker implementation
+    """
+
+    def __init__(self, debug=False, accurate_stop_execution=True):
+        """
+        :param accurate_stop_execution: if true it will emulates execution at exact stop level
+        """
+        super().__init__(debug)
+        self.last_quote = Quote(np.nan, np.nan, np.nan, np.nan, np.nan)
+        self.orders: List[TriggerOrder] = list()
+        self.fired: List[TriggerOrder] = list()
+        self.accurate_stops = accurate_stop_execution
+        if accurate_stop_execution: 
+            self.debug(f' > TriggeredOrdersTracker accurate_stops parameter is set')
+
+    def trade(self, trade_time, quantity, comment='', exact_price=None):
+        if quantity == 0:
+            self._cleanup()
+
+        pnl = 0
+        if np.isfinite(quantity):
+            pnl = self._position.update_position_bid_ask(
+                trade_time, quantity, self.last_quote.bid, self.last_quote.ask, exec_price=exact_price,
+                **self._service.get_aux_quote(), comment=comment)
+
+            # set last trade time
+            self._service.last_trade_time = trade_time
+        return pnl
+
+    def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
+        # store data
+        q = self.last_quote
+
+        # check active orders
+        if np.isfinite(q.ask) and self.orders:
+            n_orders = []
+            for o in self.orders:
+                if (o.quantity > 0 and q.ask < o.price <= ask) or (o.quantity < 0 and q.bid > o.price >= bid):
+                    o.fired = True
+                    self.trade(quote_time, o.quantity, comment=o.comment, exact_price=o.price)
+                    self.stop_at(quote_time, o.stop, o.user_data)
+                    self.take_at(quote_time, o.take, o.user_data)
+                    self.fired.append(o)
+                    # call callback on trigger fire
+                    self.on_trigger_fired(quote_time, o)
+                else:
+                    n_orders.append(o)
+            self.orders = n_orders
+
+        # update last quote and series
+        q.time, q.bid, q.ask, q.bid_ask, q.ask_size = quote_time, bid, ask, bid_size, ask_size
+        super().update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
+
+    def on_trigger_fired(self, timestamp, order: TriggerOrder):
+        pass
+
+    def cancel(self, order: TriggerOrder):
+        if order in self.orders:
+            self.orders.remove(order)
+
+    def stop_order(self, price, quantity, stop=None, take=None, comment='', user_data=None):
+        is_buy = quantity > 0
+        if is_buy and price < self.last_quote.ask:
+            raise ValueError(f"Can't send {'buy' if is_buy else 'sell'} stop order at price {price}"
+                             f" market now is {self.last_quote} | {comment}")
+
+        if (is_buy and (stop >= price or take <= price)) or (quantity < 0 and (stop <= price or take >= price)):
+            raise ValueError(f"Wrong stop/take ({stop}/{take}) for {'buy' if is_buy else 'sell'} stop order at {price}")
+
+        to = TriggerOrder(price, quantity, stop, take, comment, user_data)
+        self.orders.append(to)
+        return to
+
+    def statistics(self) -> Dict:
+        return {'triggers': len(self.fired) + len(self.orders), 'fired': len(self.fired), **super().statistics()}
 
 
 class FixedTrader(TakeStopTracker):
@@ -115,7 +240,7 @@ class FixedTrader(TakeStopTracker):
 
         # call super method
         return signal_qty * self.position_size
-    
+
 
 class FixedPctTrader(TakeStopTracker):
     """
@@ -396,7 +521,9 @@ class DispatchTracker(Tracker):
 
         # call handler if it's not service quote
         if not is_service_quote and self.active_tracker is not None:
-            self.active_tracker.on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
+            self.active_tracker.update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size,
+                                                   is_service_quote, **kwargs)
+            # self.active_tracker.on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
 
     def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
         if self.active_tracker:
@@ -484,6 +611,7 @@ class ATRTracker(TakeStopTracker):
     Take at entry +/- ATR[1] * take_target
     Stop at entry -/+ ATR[1] * stop_rosk
     """
+
     def __init__(self, size, timeframe, period, take_target, stop_risk, atr_smoother='sma', debug=False):
         super().__init__(debug)
         self.timeframe = timeframe

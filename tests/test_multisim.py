@@ -47,5 +47,11 @@ class Test(TestCase):
 
         print(r.results[0].trackers_stat)
         self.assertEqual(3, r.results[0].trackers_stat['ES']['takes'])
-        self.assertEqual(41, r.results[0].trackers_stat['ES']['stops'])
-        self.assertAlmostEqual(1255.0, r.results[0].portfolio['ES_PnL'].sum())
+        self.assertEqual(42, r.results[0].trackers_stat['ES']['stops'])
+        self.assertAlmostEqual(1160.0, r.results[0].portfolio['ES_PnL'].sum())
+
+    def test_start_stop(self):
+        r = simulation({'simple tracker': FixedTrader(10, 30, 10, 1)},
+                       self.ds, 'forex', 'Test1',
+                       start='2021-01-03', stop='2021-01-04')
+
