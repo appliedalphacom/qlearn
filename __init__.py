@@ -24,4 +24,4 @@ from qlearn.core.mlhelpers import gridsearch
 from qlearn.core.data_utils import shift_for_timeframe, put_under
 from sklearn.pipeline import make_pipeline
 from qlearn.simulation.multisim import simulation, Market
-from qlearn.simulation.multiproc import list_running_tasks, run_tasks, Task
+from qlearn.simulation.multiproc import list_running_tasks, run_tasks
