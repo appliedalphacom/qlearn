@@ -282,6 +282,10 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
 
 
 class _InfoProgress:
+    """
+    Progress bar implementation for simulations running in multiproc
+    It just updates progress of simulation in memcached
+    """
     def __init__(self, run_name, run_id, t_id, task_name, ri: RunningInfoManager):
         self.run_name = run_name
         self.run_id = run_id
@@ -298,13 +302,14 @@ class _InfoProgress:
             self._prev_i = i
 
 
-class _SimulationRun(Task):
+class _SimulationTrackerTask(Task):
     """
-    Task for simulations run
+    Task for simulations run (tracker only)
+    TODO: signal generator
     """
 
-    def __init__(self, instrument, market_description, ctor, **args):
-        super().__init__(ctor, **args)
+    def __init__(self, instrument, market_description, tracker_class, **tracker_args):
+        super().__init__(tracker_class, **tracker_args)
         self.instrument = instrument
         self.broker = market_description.broker
         self.start = market_description.start
@@ -323,16 +328,31 @@ class _SimulationRun(Task):
         return sim_result
 
 
+class IMarketDataProvider:
+    """
+    Some generic interface for providing access to historical data
+    """
+
+    def ticks(self):
+        raise ValueError("Method 'ticks()' must be implemented !!!")
+
+    def ohlc(self, timeframe, **kwargs):
+        raise ValueError("Method 'ohlc(timeframe)' must be implemented !!!")
+
+    def __getitem__(self, idx):
+        raise ValueError("Method '__getitem__(idx)' must be implemented !!!")
+    
+
 class Market:
     """
     Generic market descriptor
     """
 
-    def __init__(self, broker, start, stop, spreads, data_loader):
+    def __init__(self, broker, start, stop, spreads, data_loader: IMarketDataProvider):
         self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
 
     def new_simulation(self, instrument, task, **args):
-        return _SimulationRun(instrument, self.market_description, task, **args)
+        return _SimulationTrackerTask(instrument, self.market_description, task, **args)
 
     def new_simulations_set(self, instrument, task, list_of_permutations, simulation_id_start=0):
         return {
