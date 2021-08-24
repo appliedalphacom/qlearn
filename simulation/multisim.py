@@ -361,6 +361,6 @@ class Market:
 
     def new_simulations_set(self, instrument, task, list_of_permutations, simulation_id_start=0):
         return {
-            f'sim.{k}.{instrument}': self.new_simulation(instrument, task, [], **p) for k, p in
+            f'sim.{k}.{instrument}': self.new_simulation(instrument, task, *[], **p) for k, p in
             enumerate(list_of_permutations, simulation_id_start)
         }
