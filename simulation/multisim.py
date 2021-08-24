@@ -13,7 +13,7 @@ from ira.utils.nb_functions import z_backtest
 from ira.utils.ui_utils import red, green, yellow, blue
 from ira.utils.utils import mstruct, runtime_env
 from qlearn import MarketDataComposer
-from simulation.multiproc import Task, RunningInfoManager
+from qlearn.simulation.multiproc import Task, RunningInfoManager
 
 
 class _Types(Enum):
