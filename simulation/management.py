@@ -5,12 +5,16 @@ from collections import defaultdict
 from typing import List
 
 import pandas as pd
-from tqdm.notebook import tqdm
-
+from ira.utils.utils import runtime_env
 from ira.utils.nb_functions import z_load, z_save, z_ls, z_del
 from ira.utils.utils import mstruct
 from qlearn.simulation.multisim import MultiResults
 
+
+if runtime_env() == 'notebook':
+    from tqdm.notebook import tqdm
+else:
+    from tqdm import tqdm
 
 class SimulationRunData:
     """
