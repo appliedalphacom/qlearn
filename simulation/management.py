@@ -82,7 +82,7 @@ class SimulationRunData:
             if sd is None or 'performance' not in dir(sd): continue
             p = sd.performance
 
-            params = ','.join([f'{k}={repr(v)}' for k, v in sd.task_args[1].items()])
+            # params = ','.join([f'{k}={repr(v)}' for k, v in sd.task_args[1].items()])
             pps = sd.task_args[1] if isinstance(sd.task_args, list) else sd.task_args
             report[sd.task] = {
                 'sharpe': p.sharpe,
