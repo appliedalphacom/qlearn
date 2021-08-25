@@ -16,6 +16,7 @@ if runtime_env() == 'notebook':
 else:
     from tqdm import tqdm
 
+
 class SimulationRunData:
     """
     Represents simulation's runs data

@@ -262,7 +262,7 @@ def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_pe
     return run_id, results
 
 
-def ls_running_tasks(cleanup=False):
+def ls_running_tasks(cleanup=False, only_finished=True):
     """
     List all running tasks (processes)
     """
@@ -271,8 +271,13 @@ def ls_running_tasks(cleanup=False):
     for r in runs:
         print(f"{blue(r)} -> {rinf.get_id_info(r)}")
         for t in rinf.list_tasks(r):
-            tinf = rinf.get_task_info(r, t)
-            print(f"\t{yellow(t)} -> {tinf}")
+            task_data = rinf.get_task_info(r, t)
+
+            if only_finished and isinstance(task_data, dict):
+                if task_data.get('progress', 0) >= 100:
+                    continue
+
+            print(f"\t{yellow(t)} -> {task_data}")
 
     if cleanup:
         rinf.cleanup()
