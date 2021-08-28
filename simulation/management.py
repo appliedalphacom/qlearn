@@ -46,30 +46,33 @@ class SimulationRunData:
         for k, r in tqdm(self.p.items()):
             sd = z_load(r.path, host=self.host)['data']
             if sd:
-                if force_calc or 'performance' not in dir(sd):
-                    prf = sd.result.performance(init_cash, commissions=commissions)
-                    eqt = sd.result.equity(commissions=commissions)
-                    sd.performance = mstruct(
-                        gain=eqt[-1] - eqt[0],
-                        cagr=prf.cagr,
-                        sharpe=prf.sharpe,
-                        sortino=prf.sortino,
-                        calmar=prf.calmar,
-                        drawdown_pct=prf.drawdown_pct,
-                        drawdown_pct_on_init_bp=prf.drawdown_pct_on_init_bp,
-                        mdd_usd=prf.mdd_usd,
-                        mdd_start=prf.mdd_start,
-                        mdd_peak=prf.mdd_peak,
-                        mdd_recover=prf.mdd_recover,
-                        annual_volatility=prf.annual_volatility,
-                        dd_stat=prf.dd_stat,
-                        tail_ratio=prf.tail_ratio,
-                        stability=prf.stability,
-                        var=prf.var,
-                        n_execs=len(sd.result.executions) if sd.result.executions is not None else 0,
-                        mean_return=prf.mean_return,
-                    )
-                    z_save(r.path, sd, host=self.host)
+                try:
+                    if force_calc or 'performance' not in dir(sd):
+                        prf = sd.result.performance(init_cash, commissions=commissions)
+                        eqt = sd.result.equity(commissions=commissions)
+                        sd.performance = mstruct(
+                            gain=eqt[-1] - eqt[0],
+                            cagr=prf.cagr,
+                            sharpe=prf.sharpe,
+                            sortino=prf.sortino,
+                            calmar=prf.calmar,
+                            drawdown_pct=prf.drawdown_pct,
+                            drawdown_pct_on_init_bp=prf.drawdown_pct_on_init_bp,
+                            mdd_usd=prf.mdd_usd,
+                            mdd_start=prf.mdd_start,
+                            mdd_peak=prf.mdd_peak,
+                            mdd_recover=prf.mdd_recover,
+                            annual_volatility=prf.annual_volatility,
+                            dd_stat=prf.dd_stat,
+                            tail_ratio=prf.tail_ratio,
+                            stability=prf.stability,
+                            var=prf.var,
+                            n_execs=len(sd.result.executions) if sd.result.executions is not None else 0,
+                            mean_return=prf.mean_return,
+                        )
+                        z_save(r.path, sd, host=self.host)
+                except Exception as exc:
+                    print(f'>>> Exception in processing {r.path}: {str(exc)}')
 
     def load(self, t_id) -> mstruct:
         return z_load(f'runs/{self.prj}/{t_id}/{self.run_id}', host=self.host)['data']
