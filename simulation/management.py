@@ -2,14 +2,15 @@
    Simulation management utils
 """
 from collections import defaultdict
-from typing import List
+from typing import List, Tuple
 
+import numpy as np
 import pandas as pd
-from ira.utils.utils import runtime_env
+
 from ira.utils.nb_functions import z_load, z_save, z_ls, z_del
 from ira.utils.utils import mstruct
+from ira.utils.utils import runtime_env
 from qlearn.simulation.multisim import MultiResults
-
 
 if runtime_env() == 'notebook':
     from tqdm.notebook import tqdm
@@ -79,6 +80,30 @@ class SimulationRunData:
 
     def __getitem__(self, t_id):
         return self.load(t_id)
+
+    def delete_by_sharpe_gain_threshold(self, min_sharpe, min_gain=-np.inf) -> Tuple[int, List[str]]:
+        """
+        Remove all stored simulations with sharpe and PnL gain less then provided thresholds from database
+
+        :param min_sharpe: minimal sharpe ratio for keep this simulation in DB
+        :param min_gain: minimal PnL gain (in USD) for keep this simulation in DB (-inf by default)
+        :return n, list: number of deleted and list of retained
+        """
+        n_deleted = 0
+        retained = []
+        for k, r in tqdm(self.p.items()):
+            sd = z_load(r.path, host=self.host)['data']
+            if sd:
+                try:
+                    if 'performance' in dir(sd) and \
+                            (sd.performance.sharpe < min_sharpe or sd.performance.gain < min_gain):
+                        n_deleted += 1
+                        z_del(r.path)
+                    else:
+                        retained.append(r.path)
+                except Exception as exc:
+                    print(f'>>> Exception in processing {r.path}: {str(exc)}')
+        return n_deleted, retained
 
     def comparison_report(self) -> pd.DataFrame:
         """
