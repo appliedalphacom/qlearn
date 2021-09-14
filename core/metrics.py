@@ -74,6 +74,9 @@ class ForwardDirectionScoring(ForwardReturnsCalculator):
     def __call__(self, estimator, data, _):
         pred = estimator.predict(data)
 
+        if isinstance(pred, pd.DataFrame):
+            pred = pred[pred.columns[0]]
+
         # we skip empty signals set
         if len(pred) == 0 or all(np.isnan(pred)):
             return 0
@@ -141,6 +144,9 @@ class ForwardReturnsSharpeScoring(ForwardReturnsCalculator):
     def __call__(self, estimator, data, _):
         sharpe_metric = -1e6
         pred = estimator.predict(data)
+
+        if isinstance(pred, pd.DataFrame):
+            pred = pred[pred.columns[0]]
 
         # we skip empty signals set
         if len(pred) == 0 or all(np.isnan(pred)):
