@@ -84,8 +84,8 @@ class Pyramiding(TakeStopTracker):
     def __init__(self, size, stop_mx=3, next_mx=3, pyramiding_factor=0.5, max_positions=3,
                  flat_on_max_step=False, pyramiding_start_step=3,
                  atr_period=22, atr_timeframe='1d', atr_smoother='sma',
-                 round_size=1, debug=False):
-        super().__init__(debug)
+                 round_size=1, debug=False, take_by_limit_orders=False):
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.size = size
         self.stop_mx = stop_mx
         self.next_mx = next_mx
@@ -215,8 +215,8 @@ class RADChandelier(TakeStopTracker):
     https://corporatefinanceinstitute.com/resources/knowledge/trading-investing/chandelier-exit/
     """
 
-    def __init__(self, size, timeframe, period, stop_risk_mx, atr_smoother='sma', debug=False):
-        super().__init__(debug)
+    def __init__(self, size, timeframe, period, stop_risk_mx, atr_smoother='sma', debug=False, take_by_limit_orders=False):
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.timeframe = timeframe
         self.period = period
         self.position_size = size

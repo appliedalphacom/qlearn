@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
 
+from ira.analysis.commissions import TransactionCostsCalculator, ZeroTCC
 from ira.simulator.SignalTester import Tracker, SimulationResult
 from ira.utils.nb_functions import z_backtest
 from ira.utils.ui_utils import red, green, yellow, blue
@@ -142,12 +143,16 @@ def _recognize(setup, data, name) -> List[SimSetup]:
     return r
 
 
-def _proc_run(s: SimSetup, data, start, stop, broker, spreads, progress=None):
+def _proc_run(s: SimSetup, data, start, stop, broker, spreads, progress, tcc: TransactionCostsCalculator):
     """
     TODO: need to be running in separate process
     """
-    b = z_backtest(s.get_signals(data, start, stop), data, broker,
-                   spread=spreads, name=s.name, execution_logger=True, trackers=s.trackers, progress=progress)
+    b = z_backtest(
+        s.get_signals(data, start, stop),
+        data, broker, spread=spreads, name=s.name, execution_logger=True,
+        trackers=s.trackers, progress=progress,
+        tcc=tcc
+    )
     return b
 
 
@@ -261,7 +266,7 @@ class __ForeallProgress:
         self.i_in_sim = i
 
 
-def simulation(setup, data, broker='', project='', start=None, stop=None, spreads=0, multiproc=False):
+def simulation(setup, data, broker, project='', start=None, stop=None, spreads=0, tcc: TransactionCostsCalculator = None):
     """
     Simulate different cases
     """
@@ -273,7 +278,7 @@ def simulation(setup, data, broker='', project='', start=None, stop=None, spread
         # print(s)
         if True:
             progress.set_descr(s.name)
-            b = _proc_run(s, data, start, stop, broker, spreads, progress)
+            b = _proc_run(s, data, start, stop, broker, spreads, progress, tcc)
             results.append(b)
 
     progress.set_descr(f'Backtest {project}')
@@ -347,6 +352,7 @@ class _SimulationTrackerTask(Task):
         self.start = market_description.start
         self.stop = market_description.stop
         self.spreads = market_description.spreads
+        self.tcc = market_description.tcc
 
         # TODO: Temp loader hack !!
         self.loader: _LoaderCallable = market_description.loader
@@ -356,9 +362,12 @@ class _SimulationTrackerTask(Task):
         data = self.loader(self.instrument, start=self.start, end=self.stop).ticks()
 
         s = _recognize({f"{task_name}.{t_id}": tracker_instance}, data, run_name)[0]
-        sim_result = z_backtest(s.get_signals(data, self.start, self.stop), data, self.broker,
-                                spread=self.spreads, name=s.name, execution_logger=True, trackers=s.trackers,
-                                progress=_InfoProgress(run_name, run_id, t_id, task_name, ri))
+        sim_result = z_backtest(
+            s.get_signals(data, self.start, self.stop), data, self.broker,
+            spread=self.spreads, name=s.name, execution_logger=True, trackers=s.trackers,
+            progress=_InfoProgress(run_name, run_id, t_id, task_name, ri),
+            tcc=self.tcc
+        )
         return sim_result
 
 
@@ -367,8 +376,11 @@ class Market:
     Generic market descriptor
     """
 
-    def __init__(self, broker, start, stop, spreads, data_loader: _LoaderCallable):
-        self.market_description = mstruct(broker=broker, loader=data_loader, start=start, stop=stop, spreads=spreads)
+    def __init__(self, broker, start, stop, spreads,
+                 data_loader: _LoaderCallable,
+                 tcc: TransactionCostsCalculator = ZeroTCC()):
+        self.market_description = mstruct(broker=broker, tcc=tcc, loader=data_loader, start=start, stop=stop,
+                                          spreads=spreads)
 
     def new_simulation(self, instrument, tracker, *tracker_args, **tracker_kwargs):
         return _SimulationTrackerTask(instrument, self.market_description, tracker, *tracker_args, **tracker_kwargs)

@@ -15,7 +15,7 @@ class TakeStopTracker(Tracker):
     Simple stop/take tracker provider
     """
 
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, take_by_limit_orders=False):
         self.take = None
         self._take_user_data = None
         self.stop = None
@@ -29,6 +29,9 @@ class TakeStopTracker(Tracker):
         self.accurate_stops = False
         # what is last triggered event: 'stop' or 'take' (None if nothing was triggered yet)
         self.last_triggered_event = None
+        # if we use limit order for take profit ?
+        self.take_by_limit_orders = take_by_limit_orders
+
         if debug:
             self.debug = print
 
@@ -43,12 +46,12 @@ class TakeStopTracker(Tracker):
         self.take = take_price
         self._take_user_data = user_data
 
-    def trade(self, trade_time, quantity, comment='', exact_price=None):
+    def trade(self, trade_time, quantity, comment='', exact_price=None, market_order=True):
         if quantity == 0:
             self._cleanup()
 
         # call super method
-        super().trade(trade_time, quantity, comment, exact_price=exact_price)
+        super().trade(trade_time, quantity, comment, exact_price=exact_price, market_order=market_order)
 
     def on_take(self, timestamp, price, user_data=None):
         """
@@ -73,7 +76,10 @@ class TakeStopTracker(Tracker):
         if is_take:
             self.debug(f' -> [{timestamp}] take {pos_dir} [{self._instrument}] at {exec_price:.5f}')
             self.times_to_take.append(timestamp - self._service.last_trade_time)
-            super().trade(timestamp, 0, f'take {pos_dir} at {exec_price}', exact_price=exec_price)
+            super().trade(timestamp, 0,
+                          f'take {pos_dir} at {exec_price} by {"LIMIT" if  self.take_by_limit_orders else "MARKET"}',
+                          exact_price=exec_price,
+                          market_order=not self.take_by_limit_orders)
             self.n_takes += 1
             self.last_triggered_event = 'take'
             self.on_take(timestamp, exec_price, self._take_user_data)
@@ -137,11 +143,13 @@ class TriggeredOrdersTracker(TakeStopTracker):
     Buy/Sell Stop trigger orders tracker implementation
     """
 
-    def __init__(self, debug=False, accurate_stop_execution=True):
+    def __init__(self, debug=False,
+                 accurate_stop_execution=True,
+                 take_by_limit_orders=True):
         """
         :param accurate_stop_execution: if true it will emulates execution at exact stop level
         """
-        super().__init__(debug)
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.last_quote = Quote(np.nan, np.nan, np.nan, np.nan, np.nan)
         self.orders: List[TriggerOrder] = list()
         self.fired: List[TriggerOrder] = list()
@@ -149,7 +157,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
         if accurate_stop_execution: 
             self.debug(f' > TriggeredOrdersTracker accurate_stops parameter is set')
 
-    def trade(self, trade_time, quantity, comment='', exact_price=None):
+    def trade(self, trade_time, quantity, comment='', exact_price=None, market_order=True):
         if quantity == 0:
             self._cleanup()
 
@@ -157,7 +165,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
         if np.isfinite(quantity):
             pnl = self._position.update_position_bid_ask(
                 trade_time, quantity, self.last_quote.bid, self.last_quote.ask, exec_price=exact_price,
-                **self._service.get_aux_quote(), comment=comment)
+                **self._service.get_aux_quote(), comment=comment, market_order=market_order)
 
             # set last trade time
             self._service.last_trade_time = trade_time
@@ -217,8 +225,8 @@ class FixedTrader(TakeStopTracker):
      fixed position size, fixed stop and take
     """
 
-    def __init__(self, size, take, stop, tick_size=1, debug=False):
-        super().__init__(debug)
+    def __init__(self, size, take, stop, tick_size=1, debug=False, take_by_limit_orders=True):
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.position_size = size
         self.fixed_take = take * tick_size
         self.fixed_stop = stop * tick_size
@@ -248,8 +256,8 @@ class FixedPctTrader(TakeStopTracker):
      fixed position size, fixed stop and take
     """
 
-    def __init__(self, size, take, stop, debug=False):
-        super().__init__(debug)
+    def __init__(self, size, take, stop, debug=False, take_by_limit_orders=True):
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.position_size = size
         self.fixed_take = abs(take)
         self.fixed_stop = abs(stop)
@@ -316,7 +324,8 @@ class TurtleTracker(TakeStopTracker):
     def __init__(self,
                  account_size, dollar_per_point, max_units=4, risk_capital_pct=0.01, reinvest_pnl_pct=0,
                  contract_size=100, max_allowed_contracts=200,
-                 atr_timeframe='1d', pull_stops_on_incr=False, after_lose_only=False, debug=False):
+                 atr_timeframe='1d', pull_stops_on_incr=False, after_lose_only=False,
+                 debug=False, take_by_limit_orders=False):
         """
         Turtles strategy position tracking
         ----------------------------------
@@ -349,7 +358,7 @@ class TurtleTracker(TakeStopTracker):
         :param after_lose_only: if true it's System1 otherwise System2
         :param debug: if true it prints debug messages
         """
-        super().__init__(debug)
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.account_size = account_size
         self.dollar_per_point = dollar_per_point
         self.atr_timeframe = atr_timeframe
@@ -612,8 +621,9 @@ class ATRTracker(TakeStopTracker):
     Stop at entry -/+ ATR[1] * stop_rosk
     """
 
-    def __init__(self, size, timeframe, period, take_target, stop_risk, atr_smoother='sma', debug=False):
-        super().__init__(debug)
+    def __init__(self, size, timeframe, period, take_target, stop_risk, atr_smoother='sma',
+                 debug=False, take_by_limit_orders=True):
+        super().__init__(debug, take_by_limit_orders=take_by_limit_orders)
         self.timeframe = timeframe
         self.period = period
         self.position_size = size
