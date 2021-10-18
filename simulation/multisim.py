@@ -182,7 +182,7 @@ class MultiResults:
         return MultiResults(s if isinstance(s, list) else [s], self.project, self.broker, self.start, self.stop)
 
     def report(self, init_cash=0, risk_free=0.0, margin_call_pct=0.33, only_report=False,
-               only_positive=False, commissions=0) -> pd.DataFrame:
+               only_positive=False, account_transactions=True) -> pd.DataFrame:
         import matplotlib.pyplot as plt
         rs = self.results
 
@@ -197,7 +197,7 @@ class MultiResults:
         rpt = {}
 
         for k, _r in enumerate(rs):
-            eqty = init_cash + _r.equity(commissions=commissions)
+            eqty = init_cash + _r.equity(account_transactions=account_transactions)
             o_num = f'{k:2d}'
             print(f'{yellow(o_num)}: {blue(_r.name.ljust(max_len))} : ', end='')
 
@@ -207,19 +207,20 @@ class MultiResults:
                 continue
 
             if init_cash > 0:
-                prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct, commissions=commissions)
+                prf = _r.performance(init_cash, risk_free, margin_call_level=margin_call_pct, account_transactions=account_transactions)
                 n_execs = len(_r.executions) if _r.executions is not None else 0
 
                 rpt[_r.name] = {
                     'sharpe': prf.sharpe, 'sortino': prf.sortino, 'cagr': 100 * prf.cagr,
                     'dd': prf.mdd_usd, 'dd_pct': prf.drawdown_pct,
-                    'gain': eqty[-1] - eqty[0], 'number_executions': n_execs
+                    'gain': eqty[-1] - eqty[0], 'number_executions': n_execs,
+                    'comm': prf.broker_commissions,
                 }
 
                 print(
                     f'Sharpe: {_fmt(prf.sharpe)} | Sortino: {_fmt(prf.sortino)} | CAGR: {_fmt(100 * prf.cagr)} | '
                     f'DD: ${_fmt(prf.mdd_usd)} ({_fmt(prf.drawdown_pct)}%) | '
-                    f'Gain: ${_fmt(eqty[-1] - eqty[0])} | Execs: {n_execs}', end=''
+                    f'Gain: ${_fmt(eqty[-1] - eqty[0])} | Execs: {n_execs} | Comm: {_fmt(prf.broker_commissions)}[{ "inc" if account_transactions else "noincl"}]', end=''
                 )
 
             if not only_report:
@@ -266,9 +267,9 @@ class __ForeallProgress:
         self.i_in_sim = i
 
 
-def simulation(setup, data, broker, project='', start=None, stop=None, spreads=0, tcc: TransactionCostsCalculator = None):
+def simulation(setup, data, broker, project='', start=None, stop=None, spreads=0, tcc: TransactionCostsCalculator = None) -> MultiResults:
     """
-    Simulate different cases
+    Simulate different setups
     """
     sims = _recognize(setup, data, project)
     results = []
@@ -287,7 +288,7 @@ def simulation(setup, data, broker, project='', start=None, stop=None, spreads=0
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# New experimental multisim implementation
+# New experimental multisim implementation (WIP)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 

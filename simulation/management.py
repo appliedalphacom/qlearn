@@ -40,7 +40,7 @@ class SimulationRunData:
                 simres.append(sd.result)
         return MultiResults(simres, self.prj, '', '', '')
 
-    def calc_performance(self, init_cash, commissions=0.0, force_calc=False):
+    def calc_performance(self, init_cash, account_transactions=True, force_calc=False):
         """
         Calculate performance metrics for simulations (if no perf data)
         """
@@ -49,8 +49,8 @@ class SimulationRunData:
             if sd:
                 try:
                     if force_calc or 'performance' not in dir(sd):
-                        prf = sd.result.performance(init_cash, commissions=commissions)
-                        eqt = sd.result.equity(commissions=commissions)
+                        prf = sd.result.performance(init_cash, account_transactions=account_transactions)
+                        eqt = sd.result.equity(account_transactions=account_transactions)
                         sd.performance = mstruct(
                             gain=eqt[-1] - eqt[0],
                             cagr=prf.cagr,
@@ -70,6 +70,7 @@ class SimulationRunData:
                             var=prf.var,
                             n_execs=len(sd.result.executions) if sd.result.executions is not None else 0,
                             mean_return=prf.mean_return,
+                            commissions=prf.broker_commissions,
                         )
                         z_save(r.path, sd, host=self.host)
                 except Exception as exc:
@@ -124,6 +125,7 @@ class SimulationRunData:
                 'dd_usd': p.mdd_usd,
                 'dd_pct': p.drawdown_pct,
                 'nexecs': p.n_execs,
+                'comm': p.commissions,
                 **pps
             }
 
