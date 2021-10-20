@@ -169,7 +169,7 @@ class TriggeredOrdersTracker(TakeStopTracker):
         if np.isfinite(quantity):
             pnl = self._position.update_position_bid_ask(
                 trade_time, quantity, self.last_quote.bid, self.last_quote.ask, exec_price=exact_price,
-                **self._service.get_aux_quote(), comment=comment, market_order=market_order)
+                **self._service.get_aux_quote(), comment=comment, crossed_market=market_order)
 
             # set last trade time
             self._service.last_trade_time = trade_time
