@@ -145,7 +145,8 @@ class TriggeredOrdersTracker(TakeStopTracker):
 
     def __init__(self, debug=False,
                  accurate_stop_execution=True,
-                 take_by_limit_orders=True):
+                 take_by_limit_orders=True,
+                 open_by_limit_orders=False):
         """
         :param accurate_stop_execution: if true it will emulates execution at exact stop level
         """
@@ -154,8 +155,11 @@ class TriggeredOrdersTracker(TakeStopTracker):
         self.orders: List[TriggerOrder] = list()
         self.fired: List[TriggerOrder] = list()
         self.accurate_stops = accurate_stop_execution
+        self.open_by_limit_orders = open_by_limit_orders
         if accurate_stop_execution: 
             self.debug(f' > TriggeredOrdersTracker accurate_stops parameter is set')
+        if open_by_limit_orders:
+            self.debug(f' > open_by_limit_orders is set !')
 
     def trade(self, trade_time, quantity, comment='', exact_price=None, market_order=True):
         if quantity == 0:
@@ -181,7 +185,8 @@ class TriggeredOrdersTracker(TakeStopTracker):
             for o in self.orders:
                 if (o.quantity > 0 and q.ask < o.price <= ask) or (o.quantity < 0 and q.bid > o.price >= bid):
                     o.fired = True
-                    self.trade(quote_time, o.quantity, comment=o.comment, exact_price=o.price)
+                    is_mkt_open = not self.open_by_limit_orders
+                    self.trade(quote_time, o.quantity, comment=o.comment, exact_price=o.price, market_order=is_mkt_open)
                     self.stop_at(quote_time, o.stop, o.user_data)
                     self.take_at(quote_time, o.take, o.user_data)
                     self.fired.append(o)
