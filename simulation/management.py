@@ -55,6 +55,7 @@ class SimulationRunData:
                             gain=eqt[-1] - eqt[0],
                             cagr=prf.cagr,
                             sharpe=prf.sharpe,
+                            qr=prf.qr,
                             sortino=prf.sortino,
                             calmar=prf.calmar,
                             drawdown_pct=prf.drawdown_pct,
@@ -125,6 +126,7 @@ class SimulationRunData:
                 'dd_usd': p.mdd_usd,
                 'dd_pct': p.drawdown_pct,
                 'nexecs': p.n_execs,
+                'qr': p.qr,
                 'comm': p.commissions,
                 **pps
             }
