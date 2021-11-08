@@ -36,7 +36,7 @@ class MultiProcTest(unittest.TestCase):
                                 {
                                     '1': TestCalcTask(str, 'some test stub 1').save(False),
                                     '2': TestCalcTask(str, 'some test stub 2').save(False),
-                                }, max_cpus=1)
+                                }, max_cpus=1, collect_results=True)
 
         # just debug
         ls_running_tasks()

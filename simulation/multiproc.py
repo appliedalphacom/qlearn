@@ -159,7 +159,8 @@ def __run_task(args) -> mstruct:
 
 
 def __wait_all_tasks(name, run_id, results_iterator, total,
-                     rinf: RunningInfoManager, ui_progress, poll_timeout=0.5) -> List:
+                     rinf: RunningInfoManager, ui_progress, poll_timeout=0.5,
+                     collect_results=False) -> List:
     completed, failed = 0, 0
     started_time = datetime.now()
 
@@ -195,7 +196,11 @@ def __wait_all_tasks(name, run_id, results_iterator, total,
             # update active run status
             rinf.update_id_info(run_id, {'name': name, 'progress': completed, 'total': total, 'failed': failed,
                                          'elapsed': elapsed_seconds()})
-            results.append(result)
+
+            # on big number of simualtion to avoid memory consumption
+            # results collecting may be turned off
+            if collect_results:
+                results.append(result)
 
         # small timeout before next iteration
         sleep(poll_timeout)
@@ -209,11 +214,11 @@ def __wait_all_tasks(name, run_id, results_iterator, total,
 
 
 def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_per_proc=10, cleanup=False,
-              superseded_run_id=None, task_id_start=0) -> Tuple[str, List]:
+              superseded_run_id=None, task_id_start=0, collect_results=False) -> Tuple[str, List]:
     """
     Run tasks in parallel processes
     
-    :return: run_id, list of results
+    :return: run_id, list of results or empty list if collect_results is False (default)
     """
     n_cpu, n_tasks = max(min(mp.cpu_count(), max_cpus), 1), len(tasks)
     run_id = generate_id(name) if superseded_run_id is None else superseded_run_id
@@ -245,12 +250,13 @@ def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_pe
             # ui for jupyter
             from IPython.display import display
             display(ui_progress.panel)
-            results = __wait_all_tasks(name, run_id, results_iterator, n_tasks, rinf, ui_progress)
+            results = __wait_all_tasks(name, run_id, results_iterator, n_tasks, rinf, ui_progress,
+                                       collect_results=collect_results)
         else:
             # progress in console
             from tqdm import tqdm
             results = __wait_all_tasks(name, run_id, tqdm(results_iterator, desc=str(name), total=n_tasks), n_tasks,
-                                       rinf, ui_progress)
+                                       rinf, ui_progress, collect_results=collect_results)
 
         # remove from active list if needed
         if cleanup:
