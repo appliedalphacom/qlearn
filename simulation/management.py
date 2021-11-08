@@ -119,17 +119,20 @@ class SimulationRunData:
 
             # params = ','.join([f'{k}={repr(v)}' for k, v in sd.task_args[1].items()])
             pps = sd.task_args[1] if isinstance(sd.task_args, list) else sd.task_args
-            report[sd.task] = {
-                'sharpe': p.sharpe,
-                'gain': p.gain,
-                'cagr': 100 * p.cagr,
-                'dd_usd': p.mdd_usd,
-                'dd_pct': p.drawdown_pct,
-                'nexecs': p.n_execs,
-                'qr': p.qr,
-                'comm': p.commissions,
-                **pps
-            }
+            try:
+                report[sd.task] = {
+                    'sharpe': p.sharpe,
+                    'gain': p.gain,
+                    'cagr': 100 * p.cagr,
+                    'dd_usd': p.mdd_usd,
+                    'dd_pct': p.drawdown_pct,
+                    'nexecs': p.n_execs,
+                    'qr': p.qr,
+                    'comm': p.commissions,
+                    **pps
+                }
+            except KeyError as k:
+                print(f"  [{sd.task}] >> error getting performance metric: '{k}'")
 
         return pd.DataFrame.from_dict(report, orient='index').sort_values('sharpe', ascending=False)
 
