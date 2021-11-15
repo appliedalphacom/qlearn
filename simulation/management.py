@@ -192,7 +192,7 @@ class SimulationsManager:
 
         return SimulationRunData(prj, run_id, self.p[prj].get(run_id))
 
-    def __str__(self):
+    def ls(self):
         ml = 0
         for p in self.projects():
             ml = max(max(map(len, self.runs_for(p))), ml)
