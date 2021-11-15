@@ -200,7 +200,7 @@ class SimulationsManager:
         for p in self.projects():
             print(red(p))
             for r in self.runs_for(p):
-                print(f'  {(green(r) + ":").ljust(ml + 1)}\t{len(self.p[p][r])}')
+                print(f'  {(green(r) + ":").ljust(ml + 10)}\t{len(self.p[p][r])}')
 
 
 def ls_simulations(host=None):
