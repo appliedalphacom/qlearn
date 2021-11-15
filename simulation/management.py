@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 
 from ira.utils.nb_functions import z_load, z_save, z_ls, z_del
-from ira.utils.utils import mstruct
-from ira.utils.utils import runtime_env
+from ira.utils.utils import mstruct, runtime_env
+from ira.utils.ui_utils import red, green, blue
 from qlearn.simulation.multisim import MultiResults
 
 if runtime_env() == 'notebook':
@@ -191,6 +191,16 @@ class SimulationsManager:
             raise ValueError(f"Can't find run id {run_id} in project {prj} !")
 
         return SimulationRunData(prj, run_id, self.p[prj].get(run_id))
+
+    def __str__(self):
+        ml = 0
+        for p in self.projects():
+            ml = max(max(map(len, self.runs_for(p))), ml)
+
+        for p in self.projects():
+            print(red(p))
+            for r in self.runs_for(p):
+                print(f'  {(green(r) + ":").ljust(ml + 1)}\t{len(self.p[p][r])}')
 
 
 def ls_simulations(host=None):
