@@ -133,11 +133,13 @@ class Task:
             err = f"{run_name}/{task_name}: {str(exc)}"
 
         finish_time = datetime.now()
+        # avoid of using class stored into DB !
+        task_ctor_class_name = '.'.join([self.ctor.__module__, self.ctor.__name__]) 
         result_to_return = mstruct(name=run_name, run_id=run_id, task=task_name, task_id=t_id,
                                    started=started_time, finished=finish_time,
                                    execution_time=finish_time - started_time,
                                    task_args=[self.args, self.kwargs],
-                                   task_class=self.ctor,
+                                   task_class=task_ctor_class_name,
                                    error=err,
                                    result=result)
 
