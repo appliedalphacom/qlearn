@@ -14,7 +14,7 @@ import numpy as np
 
 from ira.utils.MemcacheController import MemcacheController
 from ira.utils.nb_functions import z_save
-from ira.utils.ui_utils import yellow, blue, ui_progress_bar
+from ira.utils.ui_utils import red, yellow, blue, ui_progress_bar
 from ira.utils.utils import mstruct, runtime_env
 
 
@@ -270,22 +270,29 @@ def run_tasks(name: str, tasks: Union[Dict, List], max_cpus=np.inf, max_tasks_pe
     return run_id, results
 
 
-def ls_running_tasks(cleanup=False, only_finished=True):
+def ls_running_tasks(cleanup=False, only_finished=True, details=False):
     """
     List all running tasks (processes)
     """
     rinf = RunningInfoManager()
     runs = rinf.list_runs()
     for r in runs:
-        print(f"{blue(r)} -> {rinf.get_id_info(r)}")
-        for t in rinf.list_tasks(r):
-            task_data = rinf.get_task_info(r, t)
+        r_info = rinf.get_id_info(r)
+        _p = r_info.get('progress', '-1')
+        _t = r_info.get('total', '-1')
+        _pct = 100 * int(_p) / int(_t)
+        s_info = f"{r_info.get('name', '???')} : {_p} ({_pct:.2f}%) from {_t} [FAILED: {red(r_info.get('failed', '0'))}] "
+        print(f"{blue(r)} -> {s_info}")
+        if details:
+            for t in rinf.list_tasks(r):
+                task_data = rinf.get_task_info(r, t)
 
-            if only_finished and isinstance(task_data, dict):
-                if task_data.get('progress', 0) >= 100:
-                    continue
+                if only_finished and isinstance(task_data, dict):
+                    if task_data.get('progress', 0) >= 100:
+                        continue
 
-            print(f"\t{yellow(t)} -> {task_data}")
+                print(f"\t{yellow(t)} -> {task_data}")
 
     if cleanup:
         rinf.cleanup()
+
