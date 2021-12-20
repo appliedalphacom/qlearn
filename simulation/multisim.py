@@ -65,18 +65,14 @@ def start_stop_sigs(data: Dict[str, pd.DataFrame], start=None, stop=None):
 
         d_sel = d[start:stop]
         if d_sel.empty:
-            raise ValueError(f">>> There is no historical '{i}' data for period {start} : {stop} !")
+            raise ValueError(f">>> There is no '{i}' historical data for period {start} : {stop} !")
 
-        dx = max(len(d_sel) // 100, 1)
-        idx = d_sel.index
-
-        # split into 100 parts
-        ss = {}
-        for j in range(0, 101):
-            ss[idx[j * dx]] = np.nan
-
-        # ss[idx[-1]] = np.nan
-        r = pd.concat((r, pd.Series(ss, name=i)), axis=1)
+        dx = max(len(d_sel) // 99, 1)
+        ix = d_sel.index[::dx]
+        last_idx = d_sel.index[-1]
+        if last_idx not in ix:
+            ix = ix.append(pd.DatetimeIndex([last_idx]))
+        r = pd.concat((r, pd.Series(np.nan, ix, name=i)), axis=1)
     return r
 
 
