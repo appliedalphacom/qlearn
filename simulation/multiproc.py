@@ -278,6 +278,9 @@ def ls_running_tasks(cleanup=False, only_finished=True, details=False):
     runs = rinf.list_runs()
     for r in runs:
         r_info = rinf.get_id_info(r)
+        if r_info is None:
+            print(f'{blue(r)} -> {red("None info yet")}')
+            continue
         _p = r_info.get('progress', '-1')
         _t = r_info.get('total', '-1')
         _pct = 100 * int(_p) / int(_t)
