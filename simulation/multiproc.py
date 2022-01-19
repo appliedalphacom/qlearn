@@ -2,6 +2,7 @@
   Multiprocess tasks handling module
 """
 import copy
+import sys
 import hashlib
 import itertools
 import multiprocessing as mp
@@ -130,7 +131,10 @@ class Task:
             # run task
             result = self.run(obj, run_name, run_id, t_id, task_name, ri)
         except Exception as exc:
-            err = f"{run_name}/{task_name}: {str(exc)}"
+            # let's show bit more info about exception here
+            import traceback
+            stack_trace = traceback.format_exc()
+            err = f"{run_name}/{task_name}: {str(exc)} | {stack_trace}"
 
         finish_time = datetime.now()
         # avoid of using class stored into DB !
