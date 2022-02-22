@@ -664,7 +664,7 @@ class ATRTracker(TakeStopTracker):
         # call super method
         return signal_qty * self.position_size
 
-class DelayTracker(TriggeredOrdersTracker):
+class SignalBarTracker(TriggeredOrdersTracker):
     """
     Tracker with delay execution
     """
