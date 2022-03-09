@@ -167,3 +167,25 @@ class Trackers_test(unittest.TestCase):
 
         print(p.executions)
         print(p.trackers_stat)
+
+    def test_signal_bar_tracker(self):
+        
+        class _Test_SignalBarTracker(SignalBarTracker):
+            pass
+        
+        data = _read_csv_ohlc('RM1')
+        s = _signals({
+            '2020-08-17 00:05:01': {'RM1': -1},
+            '2020-08-17 00:22:00': {'RM1': 0},
+        })
+        
+        tracker = _Test_SignalBarTracker('5m', 1e-5, impr='improve')
+        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True,
+                       trackers=tracker)
+
+        print(p.executions)
+        print(p.trackers_stat)
+        execs_log = list(filter(lambda x: x != '', p.executions.comment.values))
+        print(execs_log)
+        
+        self.assertTrue(execs_log==['DelayTracker; take=55.0; stop=125.0', 'take short at 55.0 by LIMIT'])
