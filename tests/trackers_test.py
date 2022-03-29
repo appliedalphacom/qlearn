@@ -11,7 +11,7 @@ pd.set_option('display.max_columns', 500)
 from ira.utils.nb_functions import z_backtest
 from qlearn.tracking.trackers import (TakeStopTracker, DispatchTracker, PipelineTracker,
                                       Tracker, TimeExpirationTracker, TriggeredOrdersTracker,
-                                      TriggerOrder, MultiTakeStopTracker)
+                                      TriggerOrder, MultiTakeStopTracker, SignalBarTracker)
 
 
 def _read_csv_ohlc(symbol):
@@ -108,6 +108,27 @@ class Trackers_test(unittest.TestCase):
              '<regime:mr> activated and flat position',
              'TimeExpirationTracker:: position 777 is expired'],
             execs_log)
+
+    def test_signal_bar_tracker(self):
+        class _Test_SignalBarTracker(SignalBarTracker):
+            pass
+
+        data = _read_csv_ohlc('RM1')
+        s = _signals({
+            '2020-08-17 00:05:01': {'RM1': -1},
+            '2020-08-17 00:22:00': {'RM1': 0},
+        })
+
+        tracker = _Test_SignalBarTracker('5m', 1e-5, impr='improve')
+        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True, trackers=tracker)
+
+        print(p.executions)
+        np.testing.assert_array_almost_equal(
+            p.executions.exec_price.values,
+            [90.0, 55.0],  # todo: here need to check if it's correct behaviour
+            err_msg='Executions are not correct !'
+        )
+
 
     def test_triggered_orders(self):
 

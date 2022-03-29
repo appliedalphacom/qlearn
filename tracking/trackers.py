@@ -8,11 +8,14 @@ from dataclasses import dataclass
 from ira.series.Indicators import ATR
 from ira.simulator.SignalTester import Tracker
 from ira.strategies.exec_core_api import Quote
+from ira.utils.utils import mstruct
 
 
 class TakeStopTracker(Tracker):
     """
     Simple stop/take tracker provider
+    
+    Now more sophisticated version is actual (MultiTakeStopTracker)
     """
 
     def __init__(self, debug=False, take_by_limit_orders=False):
@@ -881,3 +884,86 @@ class ATRTracker(TakeStopTracker):
 
         # call super method
         return signal_qty * self.position_size
+
+
+class SignalBarTracker(TriggeredOrdersTracker):
+    """
+    Tracker with delay execution
+    """
+    def __init__(self, timeframe, tick_size=1e-5,
+             entry_factor=0, stop_factor=0, impr='initial', risk_reward=1,
+             debug=False,
+             accurate_stop_execution=True,
+             take_by_limit_orders=True,
+             open_by_limit_orders=False):
+        """
+        :param accurate_stop_execution: if true it will emulates execution at exact stop level
+        """
+        self.timeframe = timeframe
+        self.tick_size = tick_size
+        self.entry_factor = entry_factor
+        self.stop_factor = stop_factor
+        self.impr = impr
+        if not self.impr in ['initial', 'improve']: raise ValueError("impr must be 'initial or 'improve")
+        self.risk_reward = risk_reward
+        super().__init__(debug, accurate_stop_execution, take_by_limit_orders, open_by_limit_orders)
+
+    def initialize(self):
+        self.ohlc = self.get_ohlc_series(self.timeframe)
+
+    def update_market_data(self, instrument: str, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs):
+        super().update_market_data(instrument, quote_time, bid, ask, bid_size, ask_size, is_service_quote, **kwargs)
+        q = self.last_quote
+        cur_ohlc = self.get_ohlc_series(self.timeframe)
+
+        if np.isfinite(q.ask) and len(self.orders)>0:
+        #check to cancel order if price worse than stop
+            qty = self.orders[0].quantity
+            stop = self.orders[0].stop
+            high = cur_ohlc.highs()[-1]
+            low = cur_ohlc.lows()[-1]
+            if (qty>0 and low<stop) or (qty<0 and high>stop):
+                self.cancel(self.orders[0])
+
+            if cur_ohlc.is_new_bar==True and self.impr=='improve':
+                # check improvement policy
+                high_old = cur_ohlc.highs()[-2]
+                low_old = cur_ohlc.lows()[-2]
+                entry, _, take = self.deal_param(qty, high_old, low_old)
+                self.cancel(self.orders[0])
+                if (qty>0 and entry<=stop) or (qty<0 and entry>=stop):
+                    return None
+                self.to = self.stop_order(entry, qty, stop, take,
+                    comment='DelayTracker; '+
+                            # 'time:'+str(signal_time)+'; '+
+                            'take='+str(round(take,5))+'; '+
+                            'stop='+str(round(stop,5))
+                    , user_data=mstruct(time=str(quote_time))
+                )
+                self.debug(f' -> [{str(quote_time)}] set order at {entry:.5f} with stop {stop:.5f} and take {take:.5f}')
+
+    def deal_param(self, qty, high, low):
+        if qty > 0:
+            entry = high * (1 + self.entry_factor)
+            stop = low * (1 - self.stop_factor)
+        else:
+            entry = low * (1 - self.entry_factor)
+            stop = high * (1 + self.stop_factor)
+        take = entry + self.risk_reward * (entry - stop)
+        return entry, stop, take
+
+    def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+        if not signal_qty == 0 and len(self.orders)==0:
+            cur_ohlc = self.get_ohlc_series(self.timeframe)
+            high = cur_ohlc.highs()[-1]
+            low = cur_ohlc.lows()[-1]
+            entry, stop, take = self.deal_param(signal_qty, high, low)
+            self.to = self.stop_order(entry, signal_qty, stop, take,
+                comment='DelayTracker; '+
+                        # 'time:'+str(signal_time)+'; '+
+                        'take='+str(round(take,5))+'; '+
+                        'stop='+str(round(stop,5))
+                , user_data=mstruct(time=str(quote_time))
+            )
+            self.debug(f' -> [{str(signal_time)}] set order at {entry:.5f} with stop {stop:.5f} and take {take:.5f}')
+        return 0
