@@ -1,6 +1,7 @@
 import unittest
 
 import pandas as pd
+import numpy as np
 
 from ira.utils.utils import mstruct
 
@@ -8,8 +9,9 @@ pd.set_option('display.width', 1000)
 pd.set_option('display.max_columns', 500)
 
 from ira.utils.nb_functions import z_backtest
-from qlearn.tracking.trackers import (TakeStopTracker, DispatchTracker, PipelineTracker, Tracker, TimeExpirationTracker,
-                                      TriggeredOrdersTracker, TriggerOrder)
+from qlearn.tracking.trackers import (TakeStopTracker, DispatchTracker, PipelineTracker,
+                                      Tracker, TimeExpirationTracker, TriggeredOrdersTracker,
+                                      TriggerOrder, MultiTakeStopTracker)
 
 
 def _read_csv_ohlc(symbol):
@@ -120,8 +122,17 @@ class Trackers_test(unittest.TestCase):
                 if signal_qty > 0:
                     entry = ask + 50 * self.tick_size
                     self.to = self.stop_order(
-                        entry, 1000, entry - 25 * self.tick_size, entry + 25 * self.tick_size,
-                        comment='My test Order', user_data=mstruct(entry_number=1, test=1)
+                        entry, 1000,
+                        entry - 25 * self.tick_size,
+                        {entry + 25 * self.tick_size: 1.0},  # test full form of take config {price: 1.0}
+                        comment='Test long order', user_data=mstruct(entry_number=1, test=1)
+                    )
+
+                if signal_qty < 0:
+                    entry = bid - 50 * self.tick_size
+                    self.to = self.stop_order(
+                        entry, -1000, entry + 100 * self.tick_size, entry - 250 * self.tick_size,
+                        comment='Test short order', user_data=mstruct(entry_number=-1, test=-1)
                     )
                 return None
 
@@ -137,6 +148,12 @@ class Trackers_test(unittest.TestCase):
                 print(f"\n\t---(FIRED)--> {timestamp} | {order} => {order.user_data} ")
                 self._fired += 1
 
+            def on_take(self, timestamp, price, is_partial,  user_data=None):
+                print(f"\n\t---(TAKE)--> {timestamp} {price} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+
+            def on_stop(self, timestamp, price, user_data=None):
+                print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
+
             def statistics(self):
                 return {'fired': self._fired, **super().statistics()}
 
@@ -144,6 +161,7 @@ class Trackers_test(unittest.TestCase):
 
         s = _signals({
             '2020-08-17 04:19:59': {'EURUSD': +1},
+            '2020-08-17 07:19:59': {'EURUSD': -1},
             '2020-08-17 23:19:59': {'EURUSD': 0},
         })
 
@@ -154,6 +172,13 @@ class Trackers_test(unittest.TestCase):
         print(p.trackers_stat)
 
         self.assertTrue(p.trackers_stat['EURUSD']['fired'] > 0)
+        self.assertTrue(p.trackers_stat['EURUSD']['takes'] == 1)
+        self.assertTrue(p.trackers_stat['EURUSD']['stops'] == 1)
+        np.testing.assert_array_almost_equal(
+            p.executions.exec_price.values,
+            [1.185980, 1.186230, 1.184655, 1.185655],
+            err_msg='Executions are not correct !'
+        )
 
     def test_take_stop_orders(self):
         data = _read_csv_ohlc('RM1')
@@ -168,24 +193,161 @@ class Trackers_test(unittest.TestCase):
         print(p.executions)
         print(p.trackers_stat)
 
-    def test_signal_bar_tracker(self):
-        
-        class _Test_SignalBarTracker(SignalBarTracker):
-            pass
-        
+    def test_multiple_takes_tracker(self):
+
+        class _Test_MultiTakeTracker(MultiTakeStopTracker):
+            def __init__(self, size, stop_points, take_config, tick_size):
+                super().__init__(True)
+                self.size = size
+                self.tick_size = tick_size
+                self.stop_points = stop_points
+                self.take_config = take_config
+
+            def on_take(self, timestamp, price, is_part_take: bool, user_data=None):
+                print(f"\t-[{timestamp}]---> {'PART' if is_part_take else ''} TAKE: {user_data}")
+
+            def on_stop(self, timestamp, price, user_data=None):
+                print(f"\t-[{timestamp}]---> STOP: {user_data}")
+
+            def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+                mp = (bid + ask) / 2
+
+                if signal_qty > 0:
+                    if self.stop_points is not None:
+                        self.debug(f'\n::: LONG at {mp} stop {mp - self.stop_points * self.tick_size}')
+                        self.stop_at(signal_time, mp - self.stop_points * self.tick_size, "Stopped for long")
+
+                    if self.take_config is not None:
+                        for i, (pts, fr, udata) in enumerate(self.take_config, 1):
+                            self.partial_take_at(signal_time, mp + i * pts * self.tick_size, fr, udata)
+
+                elif signal_qty < 0:
+                    if self.stop_points is not None:
+                        self.debug(f'\n::: SHORT at {mp} stop {mp + self.stop_points * self.tick_size}')
+                        self.stop_at(signal_time, mp + self.stop_points * self.tick_size, "Stopped for short")
+
+                    if self.take_config is not None:
+                        for i, (pts, fr, udata) in enumerate(self.take_config, 1):
+                            self.partial_take_at(signal_time, mp - i * pts * self.tick_size, fr, udata)
+
+                return signal_qty * self.size
+
+        data = _read_csv_ohlc('EURUSD')
+        s = _signals({
+            '2020-08-17 02:20:01': {'EURUSD': +1},  # 1 take + stop
+            '2020-08-17 11:20:01': {'EURUSD': +1},  # all takes
+            '2020-08-17 14:35:01': {'EURUSD': -1},  # all takes
+            '2020-08-17 18:00:00': {'EURUSD': 0},
+        })
+
+        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True,
+                       trackers=_Test_MultiTakeTracker(
+                           10000, 100, [
+                               (50, 1 / 3, 'close 1/3'),  # close 1/3 in 100 pips
+                               (50, 1 / 2, 'close 2/3'),  # close 1/2 in another 100 pips
+                               (50, 1, 'close 3/3')  # close rest in another 100 pips
+                           ], 0.00001))
+
+        print(p.executions)
+        print("- - - - - - - - - -")
+        print(p.trackers_stat)
+        print("- - - - - - - - - -")
+        self.assertEqual(p.trackers_stat['EURUSD']['takes'], 7)
+        self.assertEqual(p.trackers_stat['EURUSD']['stops'], 1)
+
+        # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        # - - - - - - - - - test it as usual take/stop - - - - - - - - - - -
+        # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         data = _read_csv_ohlc('RM1')
         s = _signals({
-            '2020-08-17 00:05:01': {'RM1': -1},
+            '2020-08-17 00:00:01': {'RM1': +1},
             '2020-08-17 00:22:00': {'RM1': 0},
         })
-        
-        tracker = _Test_SignalBarTracker('5m', 1e-5, impr='improve')
-        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True,
-                       trackers=tracker)
+
+        p1 = z_backtest(s, data, 'forex', spread=0, execution_logger=True,
+                        trackers=_Test_MultiTakeTracker(
+                            10000, None, [
+                                (16, 1, 'CLOSE ALL'),  # close 1/3 in 100 pips
+                            ], 1)
+                        )
+        print("- As Single take/stop - - - - - - - - -")
+        print(p1.executions)
+        print("- - - - - - - - - -")
+        print(p1.trackers_stat)
+        self.assertEqual(p1.trackers_stat['RM1']['takes'], 1)
+        self.assertEqual(p1.trackers_stat['RM1']['stops'], 0)
+
+    def test_triggered_order_with_multitake_targets(self):
+
+        class StopOrdersTestMultiTracker(TriggeredOrdersTracker):
+            def __init__(self, tick_size):
+                super().__init__(True)
+                self.tick_size = tick_size
+                self.to = None
+                self._fired = 0
+
+            def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+                if signal_qty > 0:
+                    entry = ask + 50 * self.tick_size
+                    self.to = self.stop_order(
+                        entry, 1000,
+                        entry - 25 * self.tick_size,
+                        {
+                            entry + 1*25 * self.tick_size: 0.5, # 1/2 at +25
+                            entry + 2*25 * self.tick_size: 1.0, # 1/2 at +50
+                        },
+                        comment='Test long order', user_data=mstruct(entry_number=1, test=1)
+                    )
+
+                if signal_qty < 0:
+                    entry = bid - 50 * self.tick_size
+                    self.to = self.stop_order(
+                        entry, -1000, entry + 100 * self.tick_size, entry - 250 * self.tick_size,
+                        comment='Test short order', user_data=mstruct(entry_number=-1, test=-1)
+                    )
+                return None
+
+            def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
+                super().on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
+
+                if self.to is not None:
+                    if self.to.fired:
+                        print(quote_time, self.to)
+                        self.to = None
+
+            def on_trigger_fired(self, timestamp, order: TriggerOrder):
+                print(f"\n\t---(FIRED)--> {timestamp} | {order} => {order.user_data} ")
+                self._fired += 1
+
+            def on_take(self, timestamp, price, is_partial,  user_data=None):
+                print(f"\n\t---(TAKE)--> {timestamp} {price} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+
+            def on_stop(self, timestamp, price, user_data=None):
+                print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
+
+            def statistics(self):
+                return {'fired': self._fired, **super().statistics()}
+
+        data = _read_csv_ohlc('EURUSD')
+
+        s = _signals({
+            '2020-08-17 04:19:59': {'EURUSD': +1},
+            '2020-08-17 07:19:59': {'EURUSD': -1},
+            '2020-08-17 23:19:59': {'EURUSD': 0},
+        })
+
+        track = StopOrdersTestMultiTracker(1e-5)
+        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True, trackers=track)
 
         print(p.executions)
         print(p.trackers_stat)
-        execs_log = list(filter(lambda x: x != '', p.executions.comment.values))
-        print(execs_log)
-        
-        self.assertTrue(execs_log==['DelayTracker; take=55.0; stop=125.0', 'take short at 55.0 by LIMIT'])
+
+        self.assertTrue(p.trackers_stat['EURUSD']['fired'] > 0)
+        self.assertTrue(p.trackers_stat['EURUSD']['takes'] == 2)
+        self.assertTrue(p.trackers_stat['EURUSD']['stops'] == 1)
+
+        np.testing.assert_array_almost_equal(
+            p.executions.exec_price.values,
+            [1.185980, 1.186230, 1.186480, 1.184655, 1.185655],
+            err_msg='Executions are not correct !'
+        )
