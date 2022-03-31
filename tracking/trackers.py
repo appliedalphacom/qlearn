@@ -136,6 +136,11 @@ class MultiTakeStopTracker(Tracker):
         # take config {price: (fraction, user_data)}
         self.part_takes: Dict[float, Tuple[float, Any]] = {}
 
+        # some helper to calculate average take price
+        self.average_take_price = np.nan
+        self._part_closed_values = 0.0
+        self._part_closed_cumsize = 0.0
+
         # stop config
         self.stop = None
         self._stop_user_data = None
@@ -217,6 +222,9 @@ class MultiTakeStopTracker(Tracker):
     def _cleanup(self):
         self.part_takes = {}
         self.stop = None
+        self.average_take_price = np.nan
+        self._part_closed_values = 0.0
+        self._part_closed_cumsize = 0.0
         self._stop_user_data = None
 
     def __process_take_risk_management(self, timestamp, exec_price, fraction_to_close, user_data, is_long):
@@ -227,6 +235,11 @@ class MultiTakeStopTracker(Tracker):
         new_pos = int(current_pos * (1 - fraction_to_close))
         pos_delta_closed = new_pos - current_pos
         is_part_take = new_pos != 0
+
+        # calculate average take price
+        self._part_closed_values += abs(pos_delta_closed) * exec_price
+        self._part_closed_cumsize += abs(pos_delta_closed)
+        self.average_take_price = self._part_closed_values / self._part_closed_cumsize
 
         # for log record
         evt = 'part_take' if is_part_take else 'take'
@@ -247,6 +260,10 @@ class MultiTakeStopTracker(Tracker):
 
         # remove processed record
         del self.part_takes[exec_price]
+
+        # here we need to clean up stops/takes because position is closed
+        if new_pos == 0:
+            self._cleanup()
 
     def __process_stop_risk_management(self, timestamp, exec_price, is_long):
         pos_dir = 'long' if is_long else 'short'

@@ -171,6 +171,7 @@ class Trackers_test(unittest.TestCase):
 
             def on_take(self, timestamp, price, is_partial, closed_amount, user_data=None):
                 print(f"\n\t---(TAKE)--> {timestamp} {price} x {closed_amount} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+                print(f"\t---| average take price: {self.average_take_price}")
 
             def on_stop(self, timestamp, price, user_data=None):
                 print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
@@ -226,6 +227,7 @@ class Trackers_test(unittest.TestCase):
 
             def on_take(self, timestamp, price, is_part_take: bool, closed_amount, user_data=None):
                 print(f"\t-[{timestamp}]---> TAKE: {closed_amount} @ {price} {'PART' if is_part_take else 'FULL'} -> {user_data}")
+                print(f"\t---| average take price: {self.average_take_price}")
 
             def on_stop(self, timestamp, price, user_data=None):
                 print(f"\t-[{timestamp}]---> STOP: {user_data}")
@@ -342,6 +344,7 @@ class Trackers_test(unittest.TestCase):
 
             def on_take(self, timestamp, price, is_partial, closed_amount, user_data=None):
                 print(f"\n\t---(TAKE)--> {timestamp} {closed_amount} @ {price} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+                print(f"\t---| average take price: {self.average_take_price}")
 
             def on_stop(self, timestamp, price, user_data=None):
                 print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
