@@ -202,7 +202,7 @@ class MultiTakeStopTracker(Tracker):
         # call super method
         super().trade(trade_time, quantity, comment, exact_price=exact_price, market_order=market_order)
 
-    def on_take(self, timestamp, price, is_partial, user_data=None):
+    def on_take(self, timestamp, price, is_partial, closed_amount, user_data=None):
         """
         Default handler on take hit
         """
@@ -223,7 +223,9 @@ class MultiTakeStopTracker(Tracker):
         pos_dir = 'long' if is_long else 'short'
 
         # new position after part or full closing
-        new_pos = int(self._position.quantity * (1 - fraction_to_close))
+        current_pos = self._position.quantity
+        new_pos = int(current_pos * (1 - fraction_to_close))
+        pos_delta_closed = new_pos - current_pos
         is_part_take = new_pos != 0
 
         # for log record
@@ -241,7 +243,7 @@ class MultiTakeStopTracker(Tracker):
 
         self.last_triggered_event = evt
         self.n_takes += 1
-        self.on_take(timestamp, exec_price, is_part_take, user_data)
+        self.on_take(timestamp, exec_price, is_part_take, pos_delta_closed, user_data)
 
         # remove processed record
         del self.part_takes[exec_price]

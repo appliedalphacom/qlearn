@@ -169,8 +169,8 @@ class Trackers_test(unittest.TestCase):
                 print(f"\n\t---(FIRED)--> {timestamp} | {order} => {order.user_data} ")
                 self._fired += 1
 
-            def on_take(self, timestamp, price, is_partial,  user_data=None):
-                print(f"\n\t---(TAKE)--> {timestamp} {price} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+            def on_take(self, timestamp, price, is_partial, closed_amount, user_data=None):
+                print(f"\n\t---(TAKE)--> {timestamp} {price} x {closed_amount} | {user_data} [{'PART' if is_partial else 'FULL'}]")
 
             def on_stop(self, timestamp, price, user_data=None):
                 print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
@@ -224,8 +224,8 @@ class Trackers_test(unittest.TestCase):
                 self.stop_points = stop_points
                 self.take_config = take_config
 
-            def on_take(self, timestamp, price, is_part_take: bool, user_data=None):
-                print(f"\t-[{timestamp}]---> {'PART' if is_part_take else ''} TAKE: {user_data}")
+            def on_take(self, timestamp, price, is_part_take: bool, closed_amount, user_data=None):
+                print(f"\t-[{timestamp}]---> TAKE: {closed_amount} @ {price} {'PART' if is_part_take else 'FULL'} -> {user_data}")
 
             def on_stop(self, timestamp, price, user_data=None):
                 print(f"\t-[{timestamp}]---> STOP: {user_data}")
@@ -340,8 +340,8 @@ class Trackers_test(unittest.TestCase):
                 print(f"\n\t---(FIRED)--> {timestamp} | {order} => {order.user_data} ")
                 self._fired += 1
 
-            def on_take(self, timestamp, price, is_partial,  user_data=None):
-                print(f"\n\t---(TAKE)--> {timestamp} {price} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+            def on_take(self, timestamp, price, is_partial, closed_amount, user_data=None):
+                print(f"\n\t---(TAKE)--> {timestamp} {closed_amount} @ {price} | {user_data} [{'PART' if is_partial else 'FULL'}]")
 
             def on_stop(self, timestamp, price, user_data=None):
                 print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
