@@ -9,7 +9,7 @@ from qlearn.core.operations import Imply, And, Or, Neg
 # basic trackers
 from qlearn.tracking.trackers import (
     Tracker, FixedTrader, FixedPctTrader, DispatchTracker, PipelineTracker, TakeStopTracker,
-    TimeExpirationTracker, TurtleTracker, ProgressionTracker, ATRTracker, TriggeredOrdersTracker
+    TimeExpirationTracker, ATRTracker, TriggeredOrdersTracker
 )
 
 # trailings

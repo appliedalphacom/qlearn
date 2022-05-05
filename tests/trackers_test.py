@@ -129,7 +129,6 @@ class Trackers_test(unittest.TestCase):
             err_msg='Executions are not correct !'
         )
 
-
     def test_triggered_orders(self):
 
         class StopOrdersTestTracker(TriggeredOrdersTracker):
@@ -373,5 +372,91 @@ class Trackers_test(unittest.TestCase):
         np.testing.assert_array_almost_equal(
             p.executions.exec_price.values,
             [1.185980, 1.186230, 1.186480, 1.184655, 1.185655],
+            err_msg='Executions are not correct !'
+        )
+
+    def test_limit_orders(self):
+        """
+        Limit orders tests
+        """
+
+        class LimitOrdersTestTracker(TriggeredOrdersTracker):
+            def __init__(self, tick_size):
+                super().__init__(True)
+                self.tick_size = tick_size
+                self.to = None
+                self._fired = 0
+
+            def on_signal(self, signal_time, signal_qty, quote_time, bid, ask, bid_size, ask_size):
+                # on buy signal
+                if signal_qty > 0:
+                    self.cancel_all()
+                    entry = bid - 80 * self.tick_size
+                    # print(f" -(B)-> BID: {bid} // entry: {entry}")
+                    self.to = self.limit_order(
+                        entry, 1000,
+                        entry - 25 * self.tick_size,
+                        {entry + 25 * self.tick_size: 1.0},
+                        comment='Test long limit order',
+                        user_data=mstruct(entry_number=1, test=1)
+                    )
+
+                if signal_qty < 0:
+                    self.cancel_all()
+                    entry = ask + 50 * self.tick_size
+                    print(f"\n\t -(S)-> ASK: {ask} // entry: {entry}\n")
+                    self.to = self.limit_order(
+                        entry, -1000,
+                        entry + 250 * self.tick_size,
+                        entry - 50 * self.tick_size,
+                        comment='Test short limit order',
+                        user_data=mstruct(entry_number=-1, test=-1)
+                    )
+                return None
+
+            def on_quote(self, quote_time, bid, ask, bid_size, ask_size, **kwargs):
+                super().on_quote(quote_time, bid, ask, bid_size, ask_size, **kwargs)
+
+                if self.to is not None:
+                    if self.to.fired:
+                        print(quote_time, self.to)
+                        self.to = None
+
+            def on_trigger_fired(self, timestamp, order: TriggerOrder):
+                print(f"\n\t---(EXECUTED)--> {timestamp} | {order} => {order.user_data} ")
+                self._fired += 1
+
+            def on_take(self, timestamp, price, is_partial, closed_amount, user_data=None):
+                print(f"\n\t---(TAKE)--> {timestamp} {price} x {closed_amount} | {user_data} [{'PART' if is_partial else 'FULL'}]")
+                print(f"\t---| average take price: {self.average_take_price}")
+
+            def on_stop(self, timestamp, price, user_data=None):
+                print(f"\n\t---(STOP)--> {timestamp} {price} | {user_data} ")
+
+            def statistics(self):
+                return {'fired': self._fired, **super().statistics()}
+
+        data = _read_csv_ohlc('EURUSD')
+
+        s = _signals({
+            '2020-08-17 08:25:01': {'EURUSD': +1},
+            '2020-08-17 10:25:01': {'EURUSD': +1},
+
+            '2020-08-17 11:50:59': {'EURUSD': -1},
+            '2020-08-17 23:19:59': {'EURUSD': 0},
+        })
+
+        track = LimitOrdersTestTracker(1e-5)
+        p = z_backtest(s, data, 'forex', spread=0, execution_logger=True, trackers=track)
+
+        print(p.executions)
+        print(p.trackers_stat)
+
+        self.assertTrue(p.trackers_stat['EURUSD']['fired'] == 3)
+        self.assertTrue(p.trackers_stat['EURUSD']['takes'] == 2)
+        self.assertTrue(p.trackers_stat['EURUSD']['stops'] == 1)
+        np.testing.assert_array_almost_equal(
+            p.executions.exec_price.values,
+            [1.183030, 1.183280, 1.184605, 1.184355, 1.185640, 1.18514],
             err_msg='Executions are not correct !'
         )
